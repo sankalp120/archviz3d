@@ -219,7 +219,7 @@ function showOutline(obj) {
 }
 
 function addFurniture(name) {
-  loader.load(`models/${name}.glb`, gltf => {
+  loader.load(`/models/${name}.glb`, gltf => {
     const model = gltf.scene;
     model.traverse(c => { if (c.isMesh) { c.castShadow = c.receiveShadow = true; } });
     scene.add(model);
