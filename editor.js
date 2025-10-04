@@ -219,7 +219,7 @@ function showOutline(obj) {
 }
 
 function addFurniture(name) {
-  loader.load(`/models/${name}.glb`, gltf => {
+  loader.load(`./public/models/${name}.glb`, gltf => {
     const model = gltf.scene;
     model.traverse(c => { if (c.isMesh) { c.castShadow = c.receiveShadow = true; } });
     scene.add(model);
@@ -323,7 +323,7 @@ function animate() {
 // === Load template from external JSON ===
 async function loadTemplates() {
   try {
-    const response = await fetch("/templates.json");
+    const response = await fetch("./public/templates.json");
     const templates = await response.json();
 
     const selectedTemplate = localStorage.getItem("selectedTemplate");
@@ -357,7 +357,7 @@ function loadTemplateData(data) {
     }
 
     if (item.type === "furniture") {
-      loader.load(`/models/${item.model}.glb`, gltf => {
+      loader.load(`./public/models/${item.model}.glb`, gltf => {
         const model = gltf.scene;
         model.position.set(...item.pos);
         scene.add(model);
