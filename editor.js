@@ -357,7 +357,7 @@ function loadTemplateData(data) {
     }
 
     if (item.type === "furniture") {
-      loader.load(`models/${item.model}.glb`, gltf => {
+      loader.load(`/models/${item.model}.glb`, gltf => {
         const model = gltf.scene;
         model.position.set(...item.pos);
         scene.add(model);
