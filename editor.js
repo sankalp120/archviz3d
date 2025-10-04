@@ -143,7 +143,7 @@ deleteBtn.onclick = () => deleteSelected();
 // === Furniture ===
 const loader = new GLTFLoader();
 const modelSelector = document.createElement("select");
-["Sofa","Sofa_2","Chair","Cupboard","Bed","TV","Lamp","Toilet","Basin","Sidetable","Toilet_2"]
+["sofa","sofa_2","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable","toilet_2"]
   .forEach(name => modelSelector.appendChild(new Option(name, name)));
 toolbar.appendChild(modelSelector);
 
