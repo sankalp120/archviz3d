@@ -323,7 +323,7 @@ function animate() {
 // === Load template from external JSON ===
 async function loadTemplates() {
   try {
-    const response = await fetch("templates.json");
+    const response = await fetch("/templates.json");
     const templates = await response.json();
 
     const selectedTemplate = localStorage.getItem("selectedTemplate");
