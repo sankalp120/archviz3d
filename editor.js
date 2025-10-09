@@ -13,9 +13,21 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(20, w / h, 0.01, 1000);
-camera.position.set(5, 10, 10);
+
+// === Camera Setup: Top-Down View ===
+const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+
+// Position the camera high above the scene, pointing straight down
+camera.position.set(0, 30, 0);
 camera.lookAt(0, 0, 0);
+
+// Rotate to a perfect top-down (orthographic-like) view
+camera.rotation.x = -Math.PI / 2;
+
+// This zoom factor ensures the grid fills about 50–75% of the viewport
+camera.zoom = 1.5;
+camera.updateProjectionMatrix();
+
 
 // === Controls ===
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -126,6 +138,8 @@ function highlightActive(mode) {
   if (mode === "rotate") rotateBtn.style.background = "orange";
   if (mode === "scale") scaleBtn.style.background = "orange";
 }
+
+
 
 // === Wall Tools ===
 const wallButton = makeToolButton("Place Wall", null);

@@ -4,54 +4,111 @@
   <meta charset="UTF-8" />
   <title>Choose Template</title>
   <link href="https://fonts.cdnfonts.com/css/akira-expanded" rel="stylesheet">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body {
+    :root {
+      --neon: #ffffff;
+      --bg: #000;
+      --card: #111;
+    }
+
+    html, body {
+      height: 100%;
       margin: 0;
-      height: 100vh;
-      background: #000;
-      color: white;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--neon);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       font-family: 'Akira Expanded', sans-serif;
       letter-spacing: 2px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
+    /* Stack logo above title */
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+
+    /* White box logo */
+    .brand-box {
+      background: #ffffff;
+      color: #000;
+      border-radius: 6px;
+      padding: 12px 20px;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: none;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 18px rgba(255,255,255,0.08);
+    }
+
+    /* Main heading */
     h1 {
       font-size: 2.3rem;
-      margin-bottom: 40px;
+      margin: 0;
       text-transform: uppercase;
-      color: #ffffff;
-      text-shadow: 0 0 5px #ffffff;
+      color: var(--neon);
+      text-shadow: 0 0 5px var(--neon);
+      line-height: 1;
+      padding: 12px 18px;
     }
 
     .container {
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      width: 300px;
+      gap: 16px;
+      width: 320px;
     }
 
     .template {
-      background: #111;
-      padding: 20px;
+      background: var(--card);
+      padding: 16px;
       text-align: center;
       border-radius: 10px;
-      border: 2px solid #ffffff;
+      border: 2px solid var(--neon);
       cursor: pointer;
-      transition: 0.3s;
+      transition: 0.18s;
+      font-size: 1rem;
+      user-select: none;
     }
 
     .template:hover {
-      background: #ffffff;
+      background: var(--neon);
       color: #000;
-      box-shadow: 0 0 1px #ffffff;
+      box-shadow: 0 0 8px var(--neon);
+      transform: translateY(-2px);
+    }
+
+    @media (max-width:420px) {
+      .brand-box {
+        width: 80%;
+        text-align: center;
+      }
+      h1 {
+        font-size: 1.8rem;
+      }
+      .container {
+        width: 85%;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Start Creating!</h1>
+  <div class="header">
+    <div class="brand-box">archviz.3d</div>
+    <h1>Start Creating!</h1>
+  </div>
+
   <div class="container">
     <div class="template" onclick="loadTemplate('blank')">Blank</div>
     <div class="template" onclick="loadTemplate('studio')">Studio</div>
@@ -63,7 +120,7 @@
   <script>
     function loadTemplate(name) {
       localStorage.setItem("selectedTemplate", name);
-      window.location.href = "editor.html"; // Go to editor
+      window.location.href = "editor.html";
     }
   </script>
 </body>
