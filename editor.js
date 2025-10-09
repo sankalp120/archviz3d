@@ -155,7 +155,7 @@ function snapWallTransform() {
   selectedWall.position.x = Math.round(selectedWall.position.x / gridSnap) * gridSnap;
   selectedWall.position.z = Math.round(selectedWall.position.z / gridSnap) * gridSnap;
   selectedWall.rotation.y = Math.round(selectedWall.rotation.y / (Math.PI / 12)) * (Math.PI / 12);
-}
+} 
 
 function toggleWallPlacement() {
   placingWall = !placingWall;
