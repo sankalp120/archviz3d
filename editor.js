@@ -72,7 +72,7 @@ let furniture = [];
 let lastPoint = null, placingWall = false;
 let selectedWall = null, selectedFurniture = null;
 let outlineGroup = null;
-let wallHeight = 3, gridSnap = 1;
+let wallHeight = 3, gridSnap = .5;
 
 // === Raycaster ===
 const raycaster = new THREE.Raycaster();
@@ -320,6 +320,14 @@ window.addEventListener("keydown", e => {
   if (e.key === "Escape") { placingWall = false; wallButton.innerText = "Place Wall"; clearSelection(); }
 });
 
+function findWallFromHit(object) {
+  while (object && !walls.includes(object)) {
+    object = object.parent;
+  }
+  return object && walls.includes(object) ? object : null;
+}
+
+
 function handleClick(e) {
   mouse.x = (e.clientX / w) * 2 - 1;
   mouse.y = -(e.clientY / h) * 2 + 1;
@@ -331,8 +339,8 @@ function handleClick(e) {
   if (!placingWall) {
     if (hits.length) {
       const obj = hits[0].object;
-      selectedWall = walls.includes(obj) ? obj : null;
-      selectedFurniture = !selectedWall ? obj.parent : null;
+      selectedWall = findWallFromHit(obj);
+      selectedFurniture = selectedWall ? null : obj.parent;
       transformControls.attach(selectedWall || selectedFurniture);
       highlightActive(transformControls.getMode());
       showOutline(selectedWall || selectedFurniture);
