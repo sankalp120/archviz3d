@@ -109,13 +109,18 @@
     <h1>Start Creating!</h1>
   </div>
 
-  <div class="container">
-    <div class="template" onclick="loadTemplate('blank')">Blank</div>
-    <div class="template" onclick="loadTemplate('studio')">Studio</div>
-    <div class="template" onclick="loadTemplate('apartment')">Apartment</div>
-    <div class="template" onclick="loadTemplate('villa')">Villa</div>
-    <div class="template" onclick="loadTemplate('office')">Office</div>
-  </div>
+<div class="container">
+  <div class="template" onclick="loadTemplate('blank')">Blank</div>
+  <div class="template" onclick="loadTemplate('studio')">Studio</div>
+  <div class="template" onclick="loadTemplate('apartment')">Apartment</div>
+  <div class="template" onclick="loadTemplate('villa')">Villa</div>
+  <div class="template" onclick="loadTemplate('office')">Office</div>
+
+  <!-- Load Saved Template -->
+  <label class="template" for="loadFile">Load Saved Design (JSON)</label>
+  <input type="file" id="loadFile" accept=".json" style="display:none" onchange="loadFromFile(event)">
+</div>
+
 
   <script>
     function loadTemplate(name) {
@@ -123,5 +128,25 @@
       window.location.href = "editor.html";
     }
   </script>
+  <script>
+  function loadFromFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        localStorage.setItem("customTemplate", JSON.stringify(data));
+        localStorage.setItem("selectedTemplate", "custom");
+        window.location.href = "editor.html";
+      } catch (err) {
+        alert("Invalid JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+</script>
+
 </body>
 </html>

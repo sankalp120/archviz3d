@@ -90,7 +90,11 @@ previewLine.visible = false;
 const transformControls = new TransformControls(camera, renderer.domElement);
 transformControls.setSize(0.8);
 transformControls.addEventListener("dragging-changed", e => controls.enabled = !e.value);
-transformControls.addEventListener("objectChange", () => snapWallTransform());
+transformControls.addEventListener("objectChange", () => {
+  snapWallTransform();
+  snapFurnitureRotation();
+});
+
 scene.add(transformControls);
 
 // === Toolbar UI ===
@@ -139,6 +143,58 @@ function highlightActive(mode) {
   if (mode === "scale") scaleBtn.style.background = "orange";
 }
 
+// === Export to JSON Button ===
+makeToolButton("Export JSON", null).onclick = () => exportToJSON();
+
+function exportToJSON() {
+  const data = [];
+
+  // === Export Walls ===
+  walls.forEach(w => {
+    const length = w.geometry.parameters.width || w.geometry.parameters.depth || 1;
+    const half = length / 2;
+    const start = [
+      w.position.x - Math.cos(w.rotation.y) * half,
+      w.position.z - Math.sin(w.rotation.y) * half
+    ];
+    const end = [
+      w.position.x + Math.cos(w.rotation.y) * half,
+      w.position.z + Math.sin(w.rotation.y) * half
+    ];
+
+    data.push({
+      type: "wall",
+      start,
+      end,
+      height: w.scale.y || 1
+    });
+  });
+
+  // === Export Furniture (with rotation + scale) ===
+  furniture.forEach(f => {
+    let modelName = f.userData.model || f.name || "custom";
+    const rot = [f.rotation.x, f.rotation.y, f.rotation.z];
+    const scale = [f.scale.x, f.scale.y, f.scale.z];
+    const pos = [f.position.x, f.position.y, f.position.z];
+
+    data.push({
+      type: "furniture",
+      model: modelName,
+      pos,
+      rot,
+      scale
+    });
+  });
+
+  // === Trigger JSON download ===
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "my_design.json";
+  a.click();
+}
+
+
 
 
 // === Wall Tools ===
@@ -170,6 +226,15 @@ function snapWallTransform() {
   selectedWall.position.z = Math.round(selectedWall.position.z / gridSnap) * gridSnap;
   selectedWall.rotation.y = Math.round(selectedWall.rotation.y / (Math.PI / 12)) * (Math.PI / 12);
 } 
+function snapFurnitureRotation() {
+  if (!selectedFurniture) return;
+  const snapStep = THREE.MathUtils.degToRad(15); // 5 degrees in radians
+  const rotY = selectedFurniture.rotation.y;
+
+  // Round rotation.y to nearest 5 degrees
+  selectedFurniture.rotation.y = Math.round(rotY / snapStep) * snapStep;
+}
+
 
 function toggleWallPlacement() {
   placingWall = !placingWall;
@@ -235,6 +300,8 @@ function showOutline(obj) {
 function addFurniture(name) {
   loader.load(`./public/models/${name}.glb`, gltf => {
     const model = gltf.scene;
+    model.userData.model = name;
+    model.name = name;
     model.traverse(c => { if (c.isMesh) { c.castShadow = c.receiveShadow = true; } });
     scene.add(model);
     furniture.push(model);
@@ -244,6 +311,7 @@ function addFurniture(name) {
     showOutline(model);
   });
 }
+
 
 // === Event Listeners ===
 window.addEventListener("click", e => handleClick(e));
@@ -337,17 +405,25 @@ function animate() {
 // === Load template from external JSON ===
 async function loadTemplates() {
   try {
+    const selectedTemplate = localStorage.getItem("selectedTemplate");
+
+    if (selectedTemplate === "custom") {
+      const data = JSON.parse(localStorage.getItem("customTemplate"));
+      loadTemplateData(data);
+      return;
+    }
+
     const response = await fetch("./public/templates.json");
     const templates = await response.json();
 
-    const selectedTemplate = localStorage.getItem("selectedTemplate");
     if (selectedTemplate && templates[selectedTemplate]) {
       loadTemplateData(templates[selectedTemplate]);
     }
   } catch (err) {
-    console.error("Failed to load templates.json", err);
+    console.error("Failed to load template", err);
   }
 }
+
 
 // Template loader function
 function loadTemplateData(data) {
@@ -362,8 +438,13 @@ function loadTemplateData(data) {
         new THREE.BoxGeometry(length, wallHeight, 0.1),
         new THREE.MeshStandardMaterial({ color: 0xffffff })
       );
-      wall.position.set((item.start[0] + item.end[0]) / 2, wallHeight / 2, (item.start[1] + item.end[1]) / 2);
+      wall.position.set(
+        (item.start[0] + item.end[0]) / 2,
+        wallHeight / 2,
+        (item.start[1] + item.end[1]) / 2
+      );
       wall.rotation.y = angle;
+      if (item.height) wall.scale.y = item.height;
       wall.castShadow = wall.receiveShadow = true;
 
       scene.add(wall);
@@ -371,15 +452,25 @@ function loadTemplateData(data) {
     }
 
     if (item.type === "furniture") {
-      loader.load(`./public/models/${item.model}.glb`, gltf => {
+      const modelName = item.model.toLowerCase();
+      loader.load(`./public/models/${modelName}.glb`, gltf => {
         const model = gltf.scene;
+        model.userData.model = modelName;
+        model.name = modelName;
+        model.traverse(c => (c.isMesh ? (c.castShadow = c.receiveShadow = true) : null));
+
         model.position.set(...item.pos);
+        if (item.rot) model.rotation.set(...item.rot);
+        if (item.scale) model.scale.set(...item.scale);
+
         scene.add(model);
         furniture.push(model);
       });
     }
   });
 }
+
+
 
 // Start loading
 loadTemplates();

@@ -1,62 +1,180 @@
 {
   "blank": [],
   "studio": [
-    { "type": "wall", "start": [-3, 0], "end": [3, 0] },
-    { "type": "wall", "start": [3, 0], "end": [3, 6] },
-    { "type": "wall", "start": [3, 6], "end": [-3, 6] },
-    { "type": "wall", "start": [-3, 6], "end": [-3, 0] },
-    { "type": "furniture", "model": "Bed", "pos": [-1.5, 0, 1.5] },
-    { "type": "furniture", "model": "Sofa", "pos": [1.5, 0, 4.5] },
-    { "type": "furniture", "model": "Lamp", "pos": [2.5, 0, 1.5] }
-  ],
+  [
+  {
+    "type": "wall",
+    "start": [
+      6,
+      5
+    ],
+    "end": [
+      -1,
+      5
+    ],
+    "height": 1
+  },
+  {
+    "type": "wall",
+    "start": [
+      -1.0000000000000002,
+      5
+    ],
+    "end": [
+      -0.9999999999999998,
+      -3
+    ],
+    "height": 1
+  },
+  {
+    "type": "wall",
+    "start": [
+      -1,
+      -3
+    ],
+    "end": [
+      6,
+      -3
+    ],
+    "height": 1
+  },
+  {
+    "type": "wall",
+    "start": [
+      6,
+      -3
+    ],
+    "end": [
+      6,
+      5
+    ],
+    "height": 1
+  },
+  {
+    "type": "furniture",
+    "model": "sofa",
+    "pos": [
+      3.1160476269084305,
+      0,
+      -1.3038406973042662
+    ],
+    "rot": [
+      0,
+      -1.5707963267948966,
+      0
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "type": "furniture",
+    "model": "lamp",
+    "pos": [
+      0,
+      0,
+      -1.5613866633587514
+    ],
+    "rot": [
+      0,
+      0,
+      0
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "type": "furniture",
+    "model": "tv",
+    "pos": [
+      2.547601724244837,
+      0,
+      3.8048019735331273
+    ],
+    "rot": [
+      0,
+      1.5707963267948966,
+      0
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  }
+]
+],
+
 
   "apartment": [
-    { "type": "wall", "start": [-5, 0], "end": [5, 0] },
-    { "type": "wall", "start": [5, 0], "end": [5, 8] },
-    { "type": "wall", "start": [5, 8], "end": [-5, 8] },
-    { "type": "wall", "start": [-5, 8], "end": [-5, 0] },
+    { "type": "wall", "start": [-6, 0], "end": [6, 0] },
+    { "type": "wall", "start": [6, 0], "end": [6, 8] },
+    { "type": "wall", "start": [6, 8], "end": [-6, 8] },
+    { "type": "wall", "start": [-6, 8], "end": [-6, 0] },
 
     { "type": "wall", "start": [-1, 0], "end": [-1, 8] },
-    { "type": "wall", "start": [-1, 5], "end": [5, 5] },
+    { "type": "wall", "start": [-1, 5], "end": [6, 5] },
 
-    { "type": "furniture", "model": "Bed", "pos": [-3, 0, 6] },
-    { "type": "furniture", "model": "Sofa", "pos": [2, 0, 2] },
-    { "type": "furniture", "model": "TV", "pos": [4, 0, 2] },
-    { "type": "furniture", "model": "Table", "pos": [2, 0, 6] }
+    { "type": "furniture", "model": "bed", "pos": [-4, 0, 6] },
+    { "type": "furniture", "model": "cupboard", "pos": [-5.3, 0, 6] },
+    { "type": "furniture", "model": "lamp", "pos": [-2.5, 0, 6.3] },
+
+    { "type": "furniture", "model": "sofa", "pos": [2.5, 0, 3.2] },
+    { "type": "furniture", "model": "tv", "pos": [5.3, 0, 3.2] },
+    { "type": "furniture", "model": "table", "pos": [2.5, 0, 6.5] },
+    { "type": "furniture", "model": "chair", "pos": [2.5, 0, 5.5] },
+    { "type": "furniture", "model": "basin", "pos": [5.5, 0, 7.5] }
   ],
 
   "villa": [
-    { "type": "wall", "start": [-6, 0], "end": [6, 0] },
-    { "type": "wall", "start": [6, 0], "end": [6, 10] },
-    { "type": "wall", "start": [6, 10], "end": [-6, 10] },
-    { "type": "wall", "start": [-6, 10], "end": [-6, 0] },
+    { "type": "wall", "start": [-8, 0], "end": [8, 0] },
+    { "type": "wall", "start": [8, 0], "end": [8, 12] },
+    { "type": "wall", "start": [8, 12], "end": [-8, 12] },
+    { "type": "wall", "start": [-8, 12], "end": [-8, 0] },
 
-    { "type": "wall", "start": [0, 0], "end": [0, 10] },
-    { "type": "wall", "start": [-6, 5], "end": [6, 5] },
+    { "type": "wall", "start": [0, 0], "end": [0, 12] },
+    { "type": "wall", "start": [-8, 6], "end": [8, 6] },
 
-    { "type": "furniture", "model": "Bed", "pos": [-4, 0, 2] },
-    { "type": "furniture", "model": "Cupboard", "pos": [-4, 0, 8] },
-    { "type": "furniture", "model": "Sofa", "pos": [2, 0, 2] },
-    { "type": "furniture", "model": "Table", "pos": [3, 0, 7] },
-    { "type": "furniture", "model": "Lamp", "pos": [5, 0, 9] }
+    { "type": "furniture", "model": "bed", "pos": [-6, 0, 9] },
+    { "type": "furniture", "model": "cupboard", "pos": [-6, 0, 11] },
+    { "type": "furniture", "model": "lamp", "pos": [-2, 0, 9.5] },
+
+    { "type": "furniture", "model": "sofa", "pos": [4, 0, 3] },
+    { "type": "furniture", "model": "tv", "pos": [7, 0, 3] },
+    { "type": "furniture", "model": "table", "pos": [3, 0, 8] },
+    { "type": "furniture", "model": "chair", "pos": [3, 0, 9] },
+    { "type": "furniture", "model": "lamp", "pos": [6, 0, 10.5] },
+
+    { "type": "furniture", "model": "basin", "pos": [-1, 0, 11.5] },
+    { "type": "furniture", "model": "toilet", "pos": [-1, 0, 10.5] }
   ],
 
   "office": [
-    { "type": "wall", "start": [-7, 0], "end": [7, 0] },
-    { "type": "wall", "start": [7, 0], "end": [7, 10] },
-    { "type": "wall", "start": [7, 10], "end": [-7, 10] },
-    { "type": "wall", "start": [-7, 10], "end": [-7, 0] },
+    { "type": "wall", "start": [-10, 0], "end": [10, 0] },
+    { "type": "wall", "start": [10, 0], "end": [10, 10] },
+    { "type": "wall", "start": [10, 10], "end": [-10, 10] },
+    { "type": "wall", "start": [-10, 10], "end": [-10, 0] },
 
     { "type": "wall", "start": [0, 0], "end": [0, 10] },
+    { "type": "wall", "start": [-10, 5], "end": [10, 5] },
 
-    { "type": "furniture", "model": "Chair", "pos": [-5, 0, 2] },
-    { "type": "furniture", "model": "Chair", "pos": [-5, 0, 4] },
-    { "type": "furniture", "model": "Chair", "pos": [-5, 0, 6] },
-    { "type": "furniture", "model": "Table", "pos": [-5, 0, 8] },
+    { "type": "furniture", "model": "table", "pos": [-7, 0, 2.5] },
+    { "type": "furniture", "model": "chair", "pos": [-7, 0, 1.5] },
+    { "type": "furniture", "model": "chair", "pos": [-7, 0, 3.5] },
+    { "type": "furniture", "model": "lamp", "pos": [-5.5, 0, 2.5] },
 
-    { "type": "furniture", "model": "Sofa", "pos": [3, 0, 3] },
-    { "type": "furniture", "model": "TV", "pos": [5, 0, 3] },
-    { "type": "furniture", "model": "Lamp", "pos": [3, 0, 8] }
-    
+    { "type": "furniture", "model": "sofa", "pos": [4, 0, 7] },
+    { "type": "furniture", "model": "table", "pos": [6, 0, 7] },
+    { "type": "furniture", "model": "tv", "pos": [9, 0, 7] },
+    { "type": "furniture", "model": "cupboard", "pos": [8, 0, 2] }
   ]
+
+
+    
+  
 }
