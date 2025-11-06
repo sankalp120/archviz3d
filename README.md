@@ -25,7 +25,7 @@ Delete Tool – Remove selected walls or furniture
 Lighting – Optimized hemisphere + directional lighting for clear visibility
 Top-Down Camera View – Simplified architectural navigation
 
-📂 Project Structure
+Project Structure
 archviz3d/
 ├── index.html          # Template selection screen
 ├── editor.html         # Main 3D editor interface
