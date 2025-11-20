@@ -55,7 +55,7 @@ function setupLighting() {
 setupLighting();
 
 // === Grid & Floor ===
-const gridSize = 20;
+const gridSize = 30;
 scene.add(new THREE.GridHelper(gridSize, gridSize));
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(gridSize, gridSize),
