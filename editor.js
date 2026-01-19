@@ -213,7 +213,11 @@ function applyMaterial(wall, type, value) {
     if (tex) {
       const cloned = tex.clone();
       // Tile 1 time per meter
-      cloned.repeat.set(wall.userData.length || 1, wallHeight);
+      const scaleFactor = 0.25;
+      cloned.repeat.set(
+        (wall.userData.length || 1) * scaleFactor, 
+        wallHeight * scaleFactor
+      );
       cloned.needsUpdate = true;
       mat.map = cloned;
       mat.color.set(0xffffff);
