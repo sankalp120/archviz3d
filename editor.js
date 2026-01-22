@@ -1,4 +1,4 @@
-// editor.js (Final: Pro Drawing Mode, Continuous Walls, Tooltips, Ortho Snap)
+// editor.js (Final: Pure Top-Down "Blender 7" Style, Neon Grid, Pro Drawing)
 import * as THREE from "three";
 import { OrbitControls } from "jsm/controls/OrbitControls.js";
 import { TransformControls } from "jsm/controls/TransformControls.js";
@@ -14,7 +14,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a1a);
+scene.background = new THREE.Color(0x111111); // Darker background for "glow" contrast
 
 // === Camera System (Persp + Ortho) ========================================
 const aspect = w / h;
@@ -24,14 +24,17 @@ const perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
 perspCamera.position.set(0, 35, 20);
 perspCamera.lookAt(0, 0, 0);
 
+// "Blender 7" Style Ortho Camera
 const orthoCamera = new THREE.OrthographicCamera(
   -viewSize * aspect, viewSize * aspect, 
   viewSize, -viewSize, 
   1, 1000
 );
-orthoCamera.position.set(0, 40, 0); // Straight Top-Down
+// Initial position (Top Down)
+orthoCamera.position.set(0, 50, 0);
 orthoCamera.lookAt(0, 0, 0);
-orthoCamera.zoom = 0.8; 
+orthoCamera.zoom = 1.0; 
+orthoCamera.updateProjectionMatrix();
 
 let activeCamera = perspCamera;
 
@@ -64,18 +67,20 @@ function setupLighting() {
 }
 setupLighting();
 
-// === Grid & Floor ========================================================
+// === Grid (The "Glowing" Look) ===========================================
 const gridSize = 30;
-const gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x888888, 0x444444);
+// 0x00d2ff = Neon Cyan (Center Line), 0x333333 = Grid Lines (Subtle)
+// To make it "glow" we use a bright color on a dark background.
+const gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x00d2ff, 0x333333);
 scene.add(gridHelper);
 
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(gridSize, gridSize),
-  new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
+  new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 })
 );
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
-floor.position.y = 0; 
+floor.position.y = -0.01; // Slightly below grid to let grid lines show
 scene.add(floor);
 
 // === Measurement Tooltip =================================================
@@ -83,15 +88,17 @@ const tooltip = document.createElement("div");
 Object.assign(tooltip.style, {
   position: "absolute",
   display: "none",
-  backgroundColor: "rgba(0,0,0,0.8)",
-  color: "#fff",
+  backgroundColor: "rgba(0, 210, 255, 0.9)", // Match grid neon
+  color: "#000",
+  fontWeight: "bold",
   padding: "4px 8px",
   borderRadius: "4px",
   fontSize: "12px",
-  pointerEvents: "none", // Click through
+  pointerEvents: "none",
   whiteSpace: "nowrap",
   transform: "translate(15px, -15px)",
-  zIndex: "100"
+  zIndex: "100",
+  boxShadow: "0 0 10px rgba(0, 210, 255, 0.5)"
 });
 document.body.appendChild(tooltip);
 
@@ -149,7 +156,6 @@ function restoreState(jsonString) {
     const w = new THREE.Mesh(geo, mat);
     w.position.set(...data.pos); w.rotation.y = data.rot; w.castShadow = true; w.receiveShadow = true;
     w.userData.length = data.len;
-    // Fix Y to prevent Z-fighting on load
     w.position.y = (wallHeight/2) - 0.01;
     if (data.texture && data.texture !== 'Plain') applyMaterial(w, 'texture', data.texture);
     else applyMaterial(w, 'color', '#' + (data.color || 'eeeeee'));
@@ -213,19 +219,19 @@ scene.add(transformControls);
 (function injectStyles() {
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-    :root { --bg: #1e1e1e; --panel: rgba(30,30,30,0.85); --border: rgba(255,255,255,0.1); --text: #e0e0e0; --accent: #3b82f6; --hover: rgba(255,255,255,0.1); }
+    :root { --bg: #111; --panel: rgba(20,20,20,0.9); --border: rgba(0, 210, 255, 0.2); --text: #e0e0e0; --accent: #00d2ff; --hover: rgba(0, 210, 255, 0.1); }
     body.light-mode { --bg: #f0f0f0; --panel: rgba(255,255,255,0.9); --border: rgba(0,0,0,0.1); --text: #333; --accent: #2563eb; --hover: rgba(0,0,0,0.05); }
     body { margin:0; font-family:'Inter',sans-serif; overflow:hidden; color:var(--text); }
     .toolbar { position:absolute; top:10px; right:10px; width:280px; max-height:95vh; display:flex; flex-direction:column; gap:12px; }
-    .panel-box { background:var(--panel); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2); }
-    .section-title { font-size:11px; text-transform:uppercase; letter-spacing:1px; opacity:0.6; font-weight:600; margin-bottom:4px; }
+    .panel-box { background:var(--panel); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,0.5); }
+    .section-title { font-size:11px; text-transform:uppercase; letter-spacing:1px; opacity:0.8; font-weight:600; margin-bottom:4px; color: var(--accent); }
     .row { display:flex; gap:6px; align-items:center; justify-content:space-between; }
     .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
     .grid-2 { display:grid; grid-template-columns:1fr 2fr; gap:6px; }
     button { background:transparent; border:1px solid var(--border); color:var(--text); padding:8px; border-radius:6px; cursor:pointer; font-size:12px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:6px; }
-    button:hover { background:var(--hover); }
-    button.active { background:var(--accent); color:white; border-color:var(--accent); }
-    input[type=number], select { background:rgba(0,0,0,0.2); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:4px; width:60px; }
+    button:hover { background:var(--hover); box-shadow: 0 0 8px var(--hover); }
+    button.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:bold; }
+    input[type=number], select { background:rgba(0,0,0,0.3); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:4px; width:60px; }
     body.light-mode input[type=number] { background:rgba(0,0,0,0.05); }
     input[type=color] { -webkit-appearance: none; border: none; width: 100%; height: 32px; padding: 0; background: none; cursor: pointer; }
     input[type=color]::-webkit-color-swatch-wrapper { padding: 0; } input[type=color]::-webkit-color-swatch { border: 1px solid var(--border); border-radius: 4px; }
@@ -297,17 +303,16 @@ const dropBtn = document.createElement("button"); dropBtn.className = "dropdown-
 const dropContent = document.createElement("div"); dropContent.className = "dropdown-content"; furnContainer.appendChild(dropContent);
 dropBtn.onclick = () => { const isOpen = dropContent.classList.contains("open"); dropContent.classList.toggle("open"); dropBtn.querySelector("svg").style.transform = isOpen ? "rotate(0deg)" : "rotate(180deg)"; };
 const furnitureList = ["sofa","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable"];
-const thumbRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); thumbRenderer.setSize(128, 128);
-const thumbScene = new THREE.Scene(); const thumbCam = new THREE.PerspectiveCamera(50, 1, 0.1, 10); thumbCam.position.set(2, 2, 3); thumbCam.lookAt(0, 0.5, 0);
-const tLight = new THREE.DirectionalLight(0xffffff, 2); tLight.position.set(2, 5, 2); thumbScene.add(tLight); thumbScene.add(new THREE.AmbientLight(0xffffff, 1));
 furnitureList.forEach(name => {
   const btn = document.createElement("div"); btn.className = "thumb-btn";
   const lbl = document.createElement("div"); lbl.className = "thumb-label"; lbl.innerText = name; btn.appendChild(lbl);
   btn.onclick = () => { loadFurniture(name); markDirty(); }; dropContent.appendChild(btn);
   loader.load(`./public/models/${name}.glb`, gltf => {
     const model = gltf.scene; const box = new THREE.Box3().setFromObject(model); const size = box.getSize(new THREE.Vector3()); const maxDim = Math.max(size.x, size.y, size.z); const scale = 2 / maxDim; model.scale.set(scale, scale, scale); model.position.y = -0.5;
-    thumbScene.clear(); thumbScene.add(tLight); thumbScene.add(new THREE.AmbientLight(0xffffff, 1)); thumbScene.add(model);
-    thumbRenderer.render(thumbScene, thumbCam); btn.style.backgroundImage = `url(${thumbRenderer.domElement.toDataURL()})`;
+    const thumbRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); thumbRenderer.setSize(128, 128);
+    const thumbScene = new THREE.Scene(); const thumbCam = new THREE.PerspectiveCamera(50, 1, 0.1, 10); thumbCam.position.set(2, 2, 3); thumbCam.lookAt(0, 0.5, 0);
+    const tLight = new THREE.DirectionalLight(0xffffff, 2); tLight.position.set(2, 5, 2); thumbScene.add(tLight); thumbScene.add(new THREE.AmbientLight(0xffffff, 1));
+    thumbScene.add(model); thumbRenderer.render(thumbScene, thumbCam); btn.style.backgroundImage = `url(${thumbRenderer.domElement.toDataURL()})`;
   });
 });
 
@@ -342,14 +347,12 @@ addControl("Project", actionRow, actionPanel);
 // === Logic: Mode & Camera ================================================
 function toggleMode() {
   isDarkMode = !isDarkMode; document.body.classList.toggle("light-mode");
-  if (isDarkMode) { scene.background.set(0x1a1a1a); floor.material.color.set(0x222222); gridHelper.material.color.setHex(0x888888); }
+  if (isDarkMode) { scene.background.set(0x111111); floor.material.color.set(0x1a1a1a); gridHelper.material.color.setHex(0x333333); }
   else { scene.background.set(0xf0f0f0); floor.material.color.set(0xdddddd); gridHelper.material.color.setHex(0x555555); }
 }
 
 function toggleCamera() {
   const isOrtho = activeCamera === orthoCamera;
-  // If drawing, disallow switching back to persp manually to keep state clean, 
-  // or allow it but be careful. Here we just switch.
   const newCam = isOrtho ? perspCamera : orthoCamera;
   newCam.position.copy(activeCamera.position); newCam.rotation.copy(activeCamera.rotation);
   activeCamera = newCam; controls.object = activeCamera; transformControls.camera = activeCamera;
@@ -364,7 +367,7 @@ window.addEventListener('resize', () => {
 });
 
 // === Logic: Wall Building =================================================
-const previewLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]), new THREE.LineBasicMaterial({color:0x3b82f6}));
+const previewLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]), new THREE.LineBasicMaterial({color:0x00d2ff}));
 scene.add(previewLine); previewLine.visible = false;
 
 function toggleWallMode() { 
@@ -373,20 +376,12 @@ function toggleWallMode() {
   drawBtn.classList.toggle("active", placingWall); 
   
   if (placingWall) {
-    // === AUTO SWITCH TO 2D ORTHO ===
     if (activeCamera !== orthoCamera) toggleCamera();
-    controls.enableRotate = false; // Lock rotation for drawing
-    // Force top down alignment
-    orthoCamera.position.set(0, 40, 0);
-    orthoCamera.lookAt(0, 0, 0);
-    orthoCamera.rotation.z = 0; 
+    controls.enableRotate = false;
+    orthoCamera.position.set(0, 0, 0); orthoCamera.lookAt(0, 0, 0); orthoCamera.zoom = 1.0; orthoCamera.updateProjectionMatrix();
     controls.reset();
   } else {
-    // Optional: Switch back or just unlock
-    controls.enableRotate = true;
-    lastPoint = null; 
-    previewLine.visible = false; 
-    tooltip.style.display = "none";
+    controls.enableRotate = true; lastPoint = null; previewLine.visible = false; tooltip.style.display = "none";
   }
 }
 
@@ -399,14 +394,8 @@ window.addEventListener("mousemove", onMove);
 window.addEventListener("keydown", e => {
   if (e.target.tagName === 'INPUT') return; 
   if (e.key === "Escape") { 
-    if(placingWall) {
-      // Cancel current drawing chain but stay in mode? Or exit mode? 
-      // Typically exit mode or cancel current chain.
-      lastPoint = null; previewLine.visible = false; tooltip.style.display = "none";
-      toggleWallMode(); // Exit mode
-    } else {
-      clearSelection(); 
-    }
+    if(placingWall) { lastPoint = null; previewLine.visible = false; tooltip.style.display = "none"; toggleWallMode(); } 
+    else { clearSelection(); }
   }
   if (e.key === "Delete") deleteSelection();
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
@@ -431,69 +420,33 @@ function onClick(e) {
       }
     } else clearSelection();
   } else {
-    // === WALL DRAWING CLICK ===
     const hits = raycaster.intersectObject(floor);
     if (hits.length > 0) {
-      let pt = hits[0].point; 
-      pt.y = 0;
-      
-      // Axis Locking (Shift) logic applied to click as well
-      if (lastPoint && e.shiftKey) {
-        const dx = Math.abs(pt.x - lastPoint.x);
-        const dz = Math.abs(pt.z - lastPoint.z);
-        if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x;
-      }
-      
+      let pt = hits[0].point; pt.y = 0;
+      if (lastPoint && e.shiftKey) { const dx = Math.abs(pt.x - lastPoint.x); const dz = Math.abs(pt.z - lastPoint.z); if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x; }
       pt.x = snap(pt.x); pt.z = snap(pt.z);
-
-      if (lastPoint) { 
-        buildWall(lastPoint, pt); 
-        saveState();
-        // === CONTINUOUS DRAWING ===
-        // Set lastPoint to the end of the new wall to start the next one immediately
-        lastPoint = pt; 
-      } else { 
-        lastPoint = pt; 
-      }
+      if (lastPoint) { buildWall(lastPoint, pt); saveState(); lastPoint = pt; } else { lastPoint = pt; }
     }
   }
 }
 
 function onMove(e) {
   if (!placingWall) return;
-  
   mouse.x = (e.clientX/w)*2-1; mouse.y = -(e.clientY/h)*2+1; 
   raycaster.setFromCamera(mouse, activeCamera);
   const hits = raycaster.intersectObject(floor);
-  
   if (hits.length > 0) {
     let pt = hits[0].point; pt.y = 0;
-    
-    // === AXIS LOCKING (SHIFT) ===
-    if (lastPoint && e.shiftKey) {
-       const dx = Math.abs(pt.x - lastPoint.x);
-       const dz = Math.abs(pt.z - lastPoint.z);
-       if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x;
-    }
-
+    if (lastPoint && e.shiftKey) { const dx = Math.abs(pt.x - lastPoint.x); const dz = Math.abs(pt.z - lastPoint.z); if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x; }
     pt.x = snap(pt.x); pt.z = snap(pt.z);
     
-    // Update Tooltip
-    tooltip.style.left = e.clientX + "px";
-    tooltip.style.top = e.clientY + "px";
-    
+    tooltip.style.left = e.clientX + "px"; tooltip.style.top = e.clientY + "px";
     if(lastPoint) {
-      previewLine.geometry.setFromPoints([lastPoint, pt]); 
-      previewLine.visible = true;
-      
-      // Calculate Distance
+      previewLine.geometry.setFromPoints([lastPoint, pt]); previewLine.visible = true;
       const dist = Math.sqrt(Math.pow(pt.x - lastPoint.x, 2) + Math.pow(pt.z - lastPoint.z, 2));
-      tooltip.innerText = `${dist.toFixed(2)}m`;
-      tooltip.style.display = "block";
+      tooltip.innerText = `${dist.toFixed(2)}m`; tooltip.style.display = "block";
     } else {
-      tooltip.innerText = "Click to Start";
-      tooltip.style.display = "block";
-      previewLine.visible = false;
+      tooltip.innerText = "Click to Start"; tooltip.style.display = "block"; previewLine.visible = false;
     }
   }
 }
