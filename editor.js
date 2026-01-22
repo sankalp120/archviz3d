@@ -1,4 +1,4 @@
-// editor.js (Final: Pure Top-Down "Blender 7" Style, Neon Grid, Pro Drawing)
+// editor.js (Final: Smart Outlines, Visual Modes, Fixed Camera)
 import * as THREE from "three";
 import { OrbitControls } from "jsm/controls/OrbitControls.js";
 import { TransformControls } from "jsm/controls/TransformControls.js";
@@ -14,7 +14,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111); // Darker background for "glow" contrast
+scene.background = new THREE.Color(0x111111);
 
 // === Camera System (Persp + Ortho) ========================================
 const aspect = w / h;
@@ -24,19 +24,18 @@ const perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
 perspCamera.position.set(0, 35, 20);
 perspCamera.lookAt(0, 0, 0);
 
-// "Blender 7" Style Ortho Camera
+// Ortho Camera (Top-Down)
 const orthoCamera = new THREE.OrthographicCamera(
   -viewSize * aspect, viewSize * aspect, 
   viewSize, -viewSize, 
   1, 1000
 );
-// Initial position (Top Down)
 orthoCamera.position.set(0, 50, 0);
 orthoCamera.lookAt(0, 0, 0);
 orthoCamera.zoom = 1.0; 
 orthoCamera.updateProjectionMatrix();
 
-let activeCamera = perspCamera;
+let activeCamera = orthoCamera;
 
 // === Controls =============================================================
 const controls = new OrbitControls(activeCamera, renderer.domElement);
@@ -46,7 +45,6 @@ controls.maxPolarAngle = Math.PI / 2.1;
 
 // === Lighting =============================================================
 let hemiLight, dirLight;
-const lightDistance = 20;
 
 function setupLighting() {
   hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
@@ -58,7 +56,7 @@ function setupLighting() {
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(2048, 2048);
   dirLight.shadow.bias = -0.0005;
-  dirLight.shadow.normalBias = 0.05;
+  dirLight.shadow.normalBias = 0.05; 
   
   const d = 30;
   dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
@@ -67,10 +65,8 @@ function setupLighting() {
 }
 setupLighting();
 
-// === Grid (The "Glowing" Look) ===========================================
+// === Grid (Neon) =========================================================
 const gridSize = 30;
-// 0x00d2ff = Neon Cyan (Center Line), 0x333333 = Grid Lines (Subtle)
-// To make it "glow" we use a bright color on a dark background.
 const gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x00d2ff, 0x333333);
 scene.add(gridHelper);
 
@@ -80,7 +76,7 @@ const floor = new THREE.Mesh(
 );
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
-floor.position.y = -0.01; // Slightly below grid to let grid lines show
+floor.position.y = -0.01; 
 scene.add(floor);
 
 // === Measurement Tooltip =================================================
@@ -88,7 +84,7 @@ const tooltip = document.createElement("div");
 Object.assign(tooltip.style, {
   position: "absolute",
   display: "none",
-  backgroundColor: "rgba(0, 210, 255, 0.9)", // Match grid neon
+  backgroundColor: "rgba(0, 210, 255, 0.9)", 
   color: "#000",
   fontWeight: "bold",
   padding: "4px 8px",
@@ -105,12 +101,12 @@ document.body.appendChild(tooltip);
 // === State & History ======================================================
 let walls = [], furniture = [], selectable = [];
 let lastPoint = null, placingWall = false;
-let selectedWall = null, selectedFurniture = null;
+let selection = []; 
+
 let wallHeight = 3, gridSnap = 0.5;
 let isDarkMode = true;
 let dirty = false;
 
-// History Stack
 const history = [];
 let historyStep = -1;
 const MAX_HISTORY = 50;
@@ -123,13 +119,15 @@ function markDirty(flag = true) {
 // === Undo/Redo Logic ======================================================
 function saveState() {
   if (historyStep < history.length - 1) history.splice(historyStep + 1);
+
   const snapshot = {
     walls: walls.map(w => ({
       pos: [w.position.x, w.position.y, w.position.z],
       rot: w.rotation.y,
       len: w.userData.length,
       texture: w.userData.texture || 'Plain',
-      color: w.material.color.getHexString() 
+      // Always save the REAL color stored in userData, not the current visual material color (which might be draft grey)
+      color: w.userData.color || 'eeeeee' 
     })),
     furniture: furniture.map(f => ({
       model: f.userData.model,
@@ -138,6 +136,7 @@ function saveState() {
       scale: [f.scale.x, f.scale.y, f.scale.z]
     }))
   };
+
   history.push(JSON.stringify(snapshot));
   if (history.length > MAX_HISTORY) history.shift(); else historyStep++;
 }
@@ -145,20 +144,46 @@ function saveState() {
 function restoreState(jsonString) {
   if (!jsonString) return;
   const state = JSON.parse(jsonString);
+
   clearSelection();
   walls.forEach(w => scene.remove(w));
   furniture.forEach(f => scene.remove(f));
   walls = []; furniture = []; selectable = [];
 
   state.walls.forEach(data => {
+    // Reconstruct
     const geo = new THREE.BoxGeometry(data.len, wallHeight, 0.2);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
+    
+    // Determine material based on current mode
+    let mat;
+    if(placingWall) {
+       mat = new THREE.MeshBasicMaterial({ color: 0x999999 });
+    } else {
+       mat = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
+    }
+
     const w = new THREE.Mesh(geo, mat);
-    w.position.set(...data.pos); w.rotation.y = data.rot; w.castShadow = true; w.receiveShadow = true;
+    
+    // Add Outline (Visibility depends on placingWall)
+    const edges = new THREE.EdgesGeometry(geo);
+    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff }));
+    line.visible = placingWall;
+    w.add(line);
+
+    w.position.set(...data.pos);
+    w.rotation.y = data.rot;
+    w.castShadow = true; w.receiveShadow = true;
     w.userData.length = data.len;
+    w.userData.color = data.color || 'eeeeee'; // Store real color data
+    w.userData.texture = data.texture || 'Plain'; // Store real texture data
     w.position.y = (wallHeight/2) - 0.01;
-    if (data.texture && data.texture !== 'Plain') applyMaterial(w, 'texture', data.texture);
-    else applyMaterial(w, 'color', '#' + (data.color || 'eeeeee'));
+    
+    // If not drawing, apply the real texture/color immediately
+    if (!placingWall) {
+        if (data.texture && data.texture !== 'Plain') applyMaterial(w, 'texture', data.texture);
+        else applyMaterial(w, 'color', '#' + w.userData.color);
+    }
+    
     scene.add(w); walls.push(w); selectable.push(w);
   });
 
@@ -175,7 +200,7 @@ function restoreState(jsonString) {
 function undo() { if (historyStep > 0) { historyStep--; restoreState(history[historyStep]); } }
 function redo() { if (historyStep < history.length - 1) { historyStep++; restoreState(history[historyStep]); } }
 
-// === Loaders & Textures ===================================================
+// === Loaders ==============================================================
 const loader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
 
@@ -195,15 +220,31 @@ const wallTextures = {
 };
 
 function applyMaterial(wall, type, value) {
+  // If we are drawing, don't update the visual material yet (keep it basic grey),
+  // just update the UserData so it applies when we exit draw mode.
+  if(placingWall) {
+      if(type === 'color') wall.userData.color = value.replace('#','');
+      if(type === 'texture') wall.userData.texture = value;
+      return; 
+  }
+
   const mat = wall.material;
   if (type === 'color') {
-    mat.map = null; mat.color.set(value); mat.needsUpdate = true; wall.userData.texture = 'Plain';
+    mat.map = null;
+    mat.color.set(value);
+    mat.needsUpdate = true;
+    wall.userData.texture = 'Plain';
+    wall.userData.color = value.replace('#','');
   } else if (type === 'texture') {
     const tex = wallTextures[value];
     if (tex) {
       const cloned = tex.clone();
       cloned.repeat.set(wall.userData.length || 1, wallHeight);
-      cloned.needsUpdate = true; mat.map = cloned; mat.color.set(0xffffff); mat.needsUpdate = true; wall.userData.texture = value;
+      cloned.needsUpdate = true;
+      mat.map = cloned;
+      mat.color.set(0xffffff);
+      mat.needsUpdate = true;
+      wall.userData.texture = value;
     }
   }
 }
@@ -212,7 +253,12 @@ function applyMaterial(wall, type, value) {
 const transformControls = new TransformControls(activeCamera, renderer.domElement);
 transformControls.setSize(0.8);
 transformControls.addEventListener("dragging-changed", e => { controls.enabled = !e.value; if (!e.value) { markDirty(true); saveState(); } });
-transformControls.addEventListener("objectChange", () => { if (selectedWall) snapWall(); if (selectedFurniture) snapFurn(); });
+transformControls.addEventListener("objectChange", () => {
+  if (selection.length === 1) {
+    if (walls.includes(selection[0])) snapWall(selection[0]);
+    if (furniture.includes(selection[0])) snapFurn(selection[0]);
+  }
+});
 scene.add(transformControls);
 
 // === UI CSS ==============================================================
@@ -254,7 +300,7 @@ const icons = {
   scale: `<svg class="icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H5v2h3v5h2v-5h5v-2z"/></svg>`,
   trash: `<svg class="icon" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`,
   save: `<svg class="icon" viewBox="0 0 24 24"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>`,
-  sun: `<svg class="icon" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1z"/></svg>`,
+  sun: `<svg class="icon" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`,
   undo: `<svg class="icon" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>`,
   redo: `<svg class="icon" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>`,
   chevron: `<svg class="icon" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>`
@@ -291,11 +337,25 @@ wallRow.appendChild(drawBtn); wallRow.appendChild(hInput); addControl("Wall Cons
 // Wall Appearance
 const appRow = document.createElement("div"); appRow.className = "grid-2";
 const colInput = document.createElement("input"); colInput.type = "color"; colInput.value = "#eeeeee"; colInput.title = "Wall Color";
-colInput.oninput = (e) => { if (selectedWall) { applyMaterial(selectedWall, 'color', e.target.value); markDirty(); saveState(); } };
+// Input event: Real-time visual update (no history)
+colInput.addEventListener("input", (e) => {
+  const color = e.target.value;
+  selection.forEach(obj => { if (walls.includes(obj)) applyMaterial(obj, 'color', color); });
+  markDirty();
+});
+// Change event: Commit to history (on release)
+colInput.addEventListener("change", (e) => { saveState(); });
+
 const texSelect = document.createElement("select"); texSelect.style.width = "100%";
 Object.keys(wallTextures).forEach(k => { const opt = document.createElement("option"); opt.value = k; opt.innerText = k; texSelect.appendChild(opt); });
-texSelect.onchange = () => { if (selectedWall) { applyMaterial(selectedWall, 'texture', texSelect.value); markDirty(); saveState(); } };
+texSelect.onchange = () => { if (selection.length > 0) { selection.forEach(obj => { if (walls.includes(obj)) applyMaterial(obj, 'texture', texSelect.value); }); markDirty(); saveState(); } };
 appRow.appendChild(colInput); appRow.appendChild(texSelect); addControl("Wall Appearance", appRow);
+
+// Length Display
+const lenRow = document.createElement("div"); lenRow.className = "row";
+lenRow.innerHTML = `<span style="font-size:12px">Length:</span>`;
+const lenDisplay = document.createElement("span"); lenDisplay.innerText = "-"; lenDisplay.style.fontWeight = "bold"; lenDisplay.style.color = "#00d2ff";
+lenRow.appendChild(lenDisplay); toolsPanel.appendChild(lenRow);
 
 // Furniture
 const furnContainer = document.createElement("div"); furnContainer.className = "dropdown-container"; addControl("Furniture Library", furnContainer);
@@ -339,7 +399,7 @@ const actionPanel = document.createElement("div"); actionPanel.className = "pane
 const actionRow = document.createElement("div"); actionRow.className = "row";
 const undoBtn = document.createElement("button"); undoBtn.innerHTML = icons.undo; undoBtn.title = "Undo (Ctrl+Z)"; undoBtn.onclick = undo;
 const redoBtn = document.createElement("button"); redoBtn.innerHTML = icons.redo; redoBtn.title = "Redo (Ctrl+Y)"; redoBtn.onclick = redo;
-const delBtn = document.createElement("button"); delBtn.innerHTML = icons.trash; delBtn.style.color = "#ff6b6b"; delBtn.onclick = deleteSelection;
+const delBtn = document.createElement("button"); delBtn.innerHTML = icons.trash; delBtn.style.color = "#ff6b6b"; delBtn.onclick = deleteSelected;
 const saveBtn = document.createElement("button"); saveBtn.innerHTML = icons.save; saveBtn.onclick = exportToJSON;
 actionRow.appendChild(undoBtn); actionRow.appendChild(redoBtn); actionRow.appendChild(delBtn); actionRow.appendChild(saveBtn);
 addControl("Project", actionRow, actionPanel);
@@ -354,9 +414,15 @@ function toggleMode() {
 function toggleCamera() {
   const isOrtho = activeCamera === orthoCamera;
   const newCam = isOrtho ? perspCamera : orthoCamera;
-  newCam.position.copy(activeCamera.position); newCam.rotation.copy(activeCamera.rotation);
-  activeCamera = newCam; controls.object = activeCamera; transformControls.camera = activeCamera;
+  newCam.position.copy(activeCamera.position); 
+  newCam.rotation.copy(activeCamera.rotation);
+  transformControls.detach();
+  activeCamera = newCam; 
+  controls.object = activeCamera; 
+  transformControls.camera = activeCamera;
   camBtn.innerHTML = isOrtho ? "3D" : "2D";
+  
+  if (selection.length > 0) transformControls.attach(selection[selection.length-1]);
 }
 
 window.addEventListener('resize', () => {
@@ -376,13 +442,42 @@ function toggleWallMode() {
   drawBtn.classList.toggle("active", placingWall); 
   
   if (placingWall) {
-    if (activeCamera !== orthoCamera) toggleCamera();
-    controls.enableRotate = false;
-    orthoCamera.position.set(0, 0, 0); orthoCamera.lookAt(0, 0, 0); orthoCamera.zoom = 1.0; orthoCamera.updateProjectionMatrix();
+    if (activeCamera !== orthoCamera) toggleCamera(); 
+    controls.enableRotate = false; 
+    // Force Top Down
+    orthoCamera.position.set(0, 50, 0); orthoCamera.lookAt(0, 0, 0); orthoCamera.zoom = 1.0; orthoCamera.updateProjectionMatrix();
     controls.reset();
+    clearSelection();
+    
+    // Switch all walls to Draft View
+    updateWallVisuals(true);
   } else {
-    controls.enableRotate = true; lastPoint = null; previewLine.visible = false; tooltip.style.display = "none";
+    controls.enableRotate = true; 
+    lastPoint = null; 
+    previewLine.visible = false; 
+    tooltip.style.display = "none";
+    
+    // Switch all walls to Realistic View
+    updateWallVisuals(false);
   }
+}
+
+// HELPER: Toggles between Blueprint (Basic Grey + Outline) and Realistic (Standard + Tex)
+function updateWallVisuals(isDraft) {
+  walls.forEach(w => {
+    // 1. Handle Outline
+    if (w.children[0]) w.children[0].visible = isDraft;
+
+    // 2. Handle Material
+    if (isDraft) {
+      w.material = new THREE.MeshBasicMaterial({ color: 0x999999 });
+    } else {
+      w.material = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
+      // Restore user data
+      if (w.userData.texture && w.userData.texture !== 'Plain') applyMaterial(w, 'texture', w.userData.texture);
+      else if (w.userData.color) applyMaterial(w, 'color', '#' + w.userData.color);
+    }
+  });
 }
 
 // === Logic: Interactions ==================================================
@@ -394,13 +489,66 @@ window.addEventListener("mousemove", onMove);
 window.addEventListener("keydown", e => {
   if (e.target.tagName === 'INPUT') return; 
   if (e.key === "Escape") { 
-    if(placingWall) { lastPoint = null; previewLine.visible = false; tooltip.style.display = "none"; toggleWallMode(); } 
+    if(placingWall) { toggleWallMode(); } 
     else { clearSelection(); }
   }
-  if (e.key === "Delete") deleteSelection();
+  if (e.key === "Delete") deleteSelected();
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); }
 });
+
+function selectObject(obj, add = false) {
+  if (!add) clearSelection();
+  if (!selection.includes(obj)) { selection.push(obj); } 
+  else if (add) { selection.splice(selection.indexOf(obj), 1); }
+  
+  updateHighlights();
+  
+  if (selection.length > 0) {
+    const last = selection[selection.length - 1];
+    transformControls.attach(last);
+    if(walls.includes(last)) {
+       if(last.userData.color) colInput.value = '#' + last.userData.color;
+       texSelect.value = last.userData.texture || 'Plain';
+       lenDisplay.innerText = `${last.userData.length.toFixed(2)}m`;
+    } else { lenDisplay.innerText = "-"; }
+  } else {
+    transformControls.detach(); lenDisplay.innerText = "-";
+  }
+}
+
+function clearSelection() {
+  selection = []; updateHighlights(); transformControls.detach(); lenDisplay.innerText = "-";
+}
+
+function updateHighlights() {
+  const oldGroup = scene.getObjectByName("highlightGroup");
+  if (oldGroup) scene.remove(oldGroup);
+  if (selection.length === 0) return;
+  
+  const group = new THREE.Group(); group.name = "highlightGroup";
+  const cyanMat = new THREE.LineBasicMaterial({ color: 0x00d2ff, depthTest: false });
+  
+  selection.forEach(obj => {
+     if (walls.includes(obj)) {
+       const edges = new THREE.EdgesGeometry(obj.geometry);
+       const line = new THREE.LineSegments(edges, cyanMat);
+       line.position.copy(obj.position); line.rotation.copy(obj.rotation); line.scale.copy(obj.scale);
+       group.add(line);
+     } else {
+       const clone = obj.clone(); clone.rotation.set(0,0,0);
+       const box = new THREE.Box3().setFromObject(clone);
+       const size = new THREE.Vector3(); box.getSize(size); const center = new THREE.Vector3(); box.getCenter(center);
+       const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+       const edges = new THREE.EdgesGeometry(geo);
+       const line = new THREE.LineSegments(edges, cyanMat);
+       line.geometry.translate(center.x, center.y, center.z);
+       line.position.copy(obj.position); line.rotation.copy(obj.rotation); line.scale.copy(obj.scale);
+       group.add(line);
+     }
+  });
+  scene.add(group);
+}
 
 function onClick(e) {
   if (e.target.closest('.toolbar')) return;
@@ -411,19 +559,16 @@ function onClick(e) {
     const hits = raycaster.intersectObjects([...walls, ...furniture], true);
     if (hits.length > 0) {
       let obj = hits[0].object; while (obj.parent && obj.parent !== scene) obj = obj.parent;
-      if (walls.includes(obj)) { selectedWall = obj; selectedFurniture = null; }
-      else if (furniture.includes(obj)) { selectedFurniture = obj; selectedWall = null; }
-      transformControls.attach(obj); 
-      if(selectedWall && selectedWall.material.color) {
-         colInput.value = '#' + selectedWall.material.color.getHexString();
-         texSelect.value = selectedWall.userData.texture || 'Plain';
-      }
-    } else clearSelection();
+      selectObject(obj, e.shiftKey);
+    } else { if (!e.shiftKey) clearSelection(); }
   } else {
     const hits = raycaster.intersectObject(floor);
     if (hits.length > 0) {
-      let pt = hits[0].point; pt.y = 0;
-      if (lastPoint && e.shiftKey) { const dx = Math.abs(pt.x - lastPoint.x); const dz = Math.abs(pt.z - lastPoint.z); if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x; }
+      const pt = hits[0].point; pt.y = 0;
+      if (lastPoint && e.shiftKey) { 
+        const dx = Math.abs(pt.x - lastPoint.x); const dz = Math.abs(pt.z - lastPoint.z); 
+        if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x; 
+      }
       pt.x = snap(pt.x); pt.z = snap(pt.z);
       if (lastPoint) { buildWall(lastPoint, pt); saveState(); lastPoint = pt; } else { lastPoint = pt; }
     }
@@ -431,23 +576,20 @@ function onClick(e) {
 }
 
 function onMove(e) {
-  if (!placingWall) return;
+  if (!placingWall || !lastPoint) return;
   mouse.x = (e.clientX/w)*2-1; mouse.y = -(e.clientY/h)*2+1; 
   raycaster.setFromCamera(mouse, activeCamera);
   const hits = raycaster.intersectObject(floor);
   if (hits.length > 0) {
-    let pt = hits[0].point; pt.y = 0;
-    if (lastPoint && e.shiftKey) { const dx = Math.abs(pt.x - lastPoint.x); const dz = Math.abs(pt.z - lastPoint.z); if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x; }
-    pt.x = snap(pt.x); pt.z = snap(pt.z);
-    
-    tooltip.style.left = e.clientX + "px"; tooltip.style.top = e.clientY + "px";
-    if(lastPoint) {
-      previewLine.geometry.setFromPoints([lastPoint, pt]); previewLine.visible = true;
-      const dist = Math.sqrt(Math.pow(pt.x - lastPoint.x, 2) + Math.pow(pt.z - lastPoint.z, 2));
-      tooltip.innerText = `${dist.toFixed(2)}m`; tooltip.style.display = "block";
-    } else {
-      tooltip.innerText = "Click to Start"; tooltip.style.display = "block"; previewLine.visible = false;
+    const pt = hits[0].point; pt.x = snap(pt.x); pt.z = snap(pt.z); pt.y = 0;
+    if (e.shiftKey) { 
+        const dx = Math.abs(pt.x - lastPoint.x); const dz = Math.abs(pt.z - lastPoint.z); 
+        if (dx > dz) pt.z = lastPoint.z; else pt.x = lastPoint.x; 
     }
+    previewLine.geometry.setFromPoints([lastPoint, pt]); previewLine.visible = true;
+    tooltip.style.left = e.clientX + "px"; tooltip.style.top = e.clientY + "px";
+    const dist = Math.sqrt(Math.pow(pt.x - lastPoint.x, 2) + Math.pow(pt.z - lastPoint.z, 2));
+    tooltip.innerText = `${dist.toFixed(2)}m`; tooltip.style.display = "block";
   }
 }
 
@@ -455,10 +597,24 @@ function buildWall(p1, p2) {
   const dx = p2.x-p1.x, dz = p2.z-p1.z; const len = Math.sqrt(dx*dx+dz*dz); if(len<0.1) return;
   const angle = Math.atan2(dz, dx);
   const geo = new THREE.BoxGeometry(len, wallHeight, 0.2);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
+  
+  // Use Basic Material + Outline for Blueprint look (since we are in Draw Mode)
+  const mat = new THREE.MeshBasicMaterial({ color: 0x999999 }); 
   const wall = new THREE.Mesh(geo, mat);
-  wall.position.set((p1.x+p2.x)/2, (wallHeight/2) - 0.01, (p1.z+p2.z)/2);
-  wall.rotation.y = -angle; wall.castShadow = wall.receiveShadow = true; wall.userData.length = len;
+  
+  const edges = new THREE.EdgesGeometry(geo);
+  const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff }));
+  line.visible = true; // Always visible on creation (draw mode)
+  wall.add(line);
+
+  wall.position.set((p1.x+p2.x)/2, wallHeight/2, (p1.z+p2.z)/2);
+  wall.rotation.y = -angle; wall.castShadow = true; wall.receiveShadow = true; 
+  wall.userData.length = len;
+  wall.userData.color = 'eeeeee'; // Default
+  wall.userData.texture = 'Plain';
+  
+  wall.position.y = (wallHeight/2) - 0.01; 
+
   scene.add(wall); walls.push(wall); selectable.push(wall);
 }
 
@@ -467,27 +623,30 @@ function loadFurniture(name) {
     const model = gltf.scene; model.userData.model = name;
     model.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
     scene.add(model); furniture.push(model); selectable.push(model);
-    selectedFurniture = model; selectedWall = null; transformControls.attach(model);
-    markDirty(); saveState();
+    selectObject(model); markDirty(); saveState();
   });
 }
 
-function deleteSelection() {
-  if (selectedWall) { scene.remove(selectedWall); walls = walls.filter(w => w !== selectedWall); }
-  else if (selectedFurniture) { scene.remove(selectedFurniture); furniture = furniture.filter(f => f !== selectedFurniture); }
+function deleteSelected() {
+  if (selection.length === 0) return;
+  selection.forEach(obj => {
+    scene.remove(obj);
+    if (walls.includes(obj)) walls = walls.filter(w => w !== obj);
+    if (furniture.includes(obj)) furniture = furniture.filter(f => f !== obj);
+  });
   clearSelection(); markDirty(); saveState();
 }
 
-function clearSelection() { transformControls.detach(); selectedWall = null; selectedFurniture = null; }
-function snapWall() { if(!selectedWall) return; selectedWall.position.x = snap(selectedWall.position.x); selectedWall.position.z = snap(selectedWall.position.z); }
-function snapFurn() { if(!selectedFurniture) return; selectedFurniture.rotation.y = Math.round(selectedFurniture.rotation.y/(Math.PI/12))*(Math.PI/12); }
+function snapWall(obj) { obj.position.x = snap(obj.position.x); obj.position.z = snap(obj.position.z); }
+function snapFurn(obj) { obj.rotation.y = Math.round(obj.rotation.y/(Math.PI/12))*(Math.PI/12); }
 
 // === Loop & Export ========================================================
 function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, activeCamera); }
 animate();
+
 function exportToJSON() {
   const data = {
-    walls: walls.map(w => ({ pos: [w.position.x,w.position.y,w.position.z], rot: w.rotation.y, len: w.userData.length, texture: w.userData.texture||'Plain', color: w.material.color.getHexString() })),
+    walls: walls.map(w => ({ pos: [w.position.x,w.position.y,w.position.z], rot: w.rotation.y, len: w.userData.length, texture: w.userData.texture||'Plain', color: w.userData.color || 'eeeeee' })),
     furniture: furniture.map(f => ({ model: f.userData.model, pos: [f.position.x,f.position.y,f.position.z], rot: [f.rotation.x,f.rotation.y,f.rotation.z], scale: [f.scale.x,f.scale.y,f.scale.z] }))
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -502,13 +661,28 @@ async function loadTemplate() {
   if(tName === "custom") { const raw = localStorage.getItem("customTemplate"); if(raw) data = JSON.parse(raw); }
   else { try { const res = await fetch("./public/templates.json"); const json = await res.json(); data = json[tName] || []; } catch(e) {} }
   const items = Array.isArray(data) ? data : [...(data.walls||[]), ...(data.furniture||[])];
+  
   items.forEach(item => {
     if(item.type === "wall" || item.len) {
       if(item.start && item.end) buildWall({x:item.start[0],z:item.start[1]}, {x:item.end[0],z:item.end[1]});
       else {
          const geo = new THREE.BoxGeometry(item.len, wallHeight, 0.2); const mat = new THREE.MeshStandardMaterial({color:0xeeeeee});
-         const w = new THREE.Mesh(geo, mat); w.position.set(...item.pos); w.rotation.y = item.rot; w.castShadow=true; w.receiveShadow=true; w.userData.length = item.len; w.position.y = (wallHeight/2) - 0.01;
-         if(item.texture && item.texture !== 'Plain') applyMaterial(w, 'texture', item.texture); else if(item.color) applyMaterial(w, 'color', '#' + item.color);
+         const w = new THREE.Mesh(geo, mat); w.position.set(...item.pos); w.rotation.y = item.rot; w.castShadow=true; w.receiveShadow=true; w.userData.length = item.len;
+         
+         const edges = new THREE.EdgesGeometry(geo);
+         const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff }));
+         line.visible = false; // Loaded walls start in Standard mode (not drawing)
+         w.add(line);
+         
+         w.position.y = (wallHeight/2) - 0.01;
+         
+         // Apply saved appearance
+         w.userData.color = item.color || 'eeeeee';
+         w.userData.texture = item.texture || 'Plain';
+         
+         if(item.texture && item.texture !== 'Plain') applyMaterial(w, 'texture', item.texture);
+         else applyMaterial(w, 'color', '#' + w.userData.color);
+
          scene.add(w); walls.push(w); selectable.push(w);
       }
     } else if (item.type === "furniture" || item.model) {
@@ -521,5 +695,6 @@ async function loadTemplate() {
   });
   setTimeout(() => saveState(), 500);
 }
+
 loadTemplate();
 window.addEventListener("beforeunload", (e) => { if(dirty) e.returnValue = "Unsaved changes"; });
