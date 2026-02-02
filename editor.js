@@ -237,13 +237,23 @@ function applyMaterial(wall, type, value) {
     wall.userData.color = value.replace('#','');
   } else if (type === 'texture') {
     const tex = wallTextures[value];
-    if (tex) {
+   if (tex) {
       const cloned = tex.clone();
+      
+      // FIX: Ensure the clone uses the original image reference properly
+      cloned.source = tex.source; 
+      
       cloned.repeat.set(wall.userData.length || 1, wallHeight);
-      cloned.needsUpdate = true;
+      
+      // --- DELETE THIS LINE ---
+      // cloned.needsUpdate = true; 
+      // ------------------------
+
+      // Apply the texture
       mat.map = cloned;
       mat.color.set(0xffffff);
-      mat.needsUpdate = true;
+      mat.needsUpdate = true; // Update the MATERIAL, not the texture
+      
       wall.userData.texture = value;
     }
   }
