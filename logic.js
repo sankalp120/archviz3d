@@ -5,13 +5,18 @@ import { state } from "./store.js";
 import { clearSelection } from "./interaction.js";
 
 // === Online Texture Registry ===
-const textures = {
-  'Plain': null, 
-  'Brick': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/brick_diffuse.jpg'),
-  'Concrete': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg'),
-  'Wood': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/hardwood2_diffuse.jpg'),
-  'Paper': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/uv_grid_opengl.jpg')
+// Exported URLs for UI Thumbnails
+export const textureURLs = {
+  'Brick': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/brick_diffuse.jpg',
+  'Concrete': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg',
+  'Wood': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/hardwood2_diffuse.jpg',
+  'Paper': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/uv_grid_opengl.jpg'
 };
+
+const textures = { 'Plain': null };
+Object.keys(textureURLs).forEach(key => {
+    textures[key] = loadTex(textureURLs[key]);
+});
 
 // === Nodes & Walls ===
 export function createNode(pos) {
@@ -34,7 +39,8 @@ export function buildWall(p1, p2, silent = false) {
   
   wall.position.set((p1.x+p2.x)/2, state.wallHeight/2, (p1.z+p2.z)/2);
   wall.rotation.y = -angle; wall.castShadow = wall.receiveShadow = true;
-  wall.userData = { length: len, color: 'eeeeee', texture: 'Plain', textureScale: 1, start: nStart, end: nEnd };
+  // Default mapping set to 0.2 per previous request
+  wall.userData = { length: len, color: 'eeeeee', texture: 'Plain', textureScale: 0.2, start: nStart, end: nEnd };
   wall.position.y = (state.wallHeight/2) - 0.01;
 
   nStart.userData.walls.push(wall); nEnd.userData.walls.push(wall);
@@ -85,7 +91,7 @@ export function generateFloor() {
     
     const tName = state.floorConfig.texture;
     const tex = textures[tName];
-    const scale = state.floorConfig.scale || 1.0;
+    const scale = state.floorConfig.scale || 0.2;
     
     const mat = new THREE.MeshStandardMaterial({ 
         color: '#' + state.floorConfig.color, 
@@ -147,7 +153,7 @@ export function applyMaterial(obj, type, value) {
   } else if (type === 'texture') {
     const tex = textures[value];
     if(tex) {
-      const scale = obj.userData.textureScale || 1.0;
+      const scale = obj.userData.textureScale || 0.2;
       const cloned = tex.clone(); cloned.source = tex.source; 
       // Apply Scale to Wall Mapping
       cloned.repeat.set((obj.userData.length || 1) * scale, state.wallHeight * scale);
@@ -156,7 +162,7 @@ export function applyMaterial(obj, type, value) {
   }
 }
 
-// ... CheckTransparentWalls, Save, Undo, Redo (Unchanged logic from previous, included below for completeness) ...
+// ... CheckTransparentWalls, Save, Undo, Redo ...
 export function checkTransparentWalls() {
     if (!state.transparentWalls || state.placingWall) {
         state.walls.forEach(w => {
@@ -211,7 +217,7 @@ function restoreSnapshot(d) {
   d.walls.forEach(w => {
      const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
      const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
-     wall.userData.texture = w.t; wall.userData.color = w.c; wall.userData.textureScale = w.ts || 1.0;
+     wall.userData.texture = w.t; wall.userData.color = w.c; wall.userData.textureScale = w.ts || 0.2;
      if(!state.placingWall) {
          if (w.t && w.t !== 'Plain') applyMaterial(wall, 'texture', w.t);
          else applyMaterial(wall, 'color', '#' + w.c);

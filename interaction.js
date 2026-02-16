@@ -104,7 +104,7 @@ function updateHighlights() {
 function updateUI(obj) {
     const el = document.getElementById("ui-len");
     const col = document.getElementById("colInput");
-    const tex = document.getElementById("texDropdown"); // Updated ID
+    const tex = document.getElementById("texDropdown");
     const slide = document.getElementById("scaleSlide");
     const valSpan = document.getElementById("scaleVal");
     

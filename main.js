@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, perspCamera, handleResize, loader, updateGrid, updateSun, toggleDarkMode } from "./world.js";
 import { state, markDirty } from "./store.js";
 import { setupEvents, transformControls, clearSelection, selectObject, deleteSelected, selectAll, hidePreview, setGizmoMode } from "./interaction.js";
-import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures } from "./logic.js";
+import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures, textureURLs } from "./logic.js";
 
 function loadFurniture(name) {
   loader.load(`./public/models/${name}.glb`, (gltf) => {
@@ -29,31 +29,33 @@ const icons = {
 const style = document.createElement('style');
 style.textContent = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-  :root { --bg: #111; --panel: rgba(20,20,20,0.95); --border: rgba(0, 210, 255, 0.2); --accent: #00d2ff; }
-  body { margin:0; font-family:'Inter',sans-serif; overflow:hidden; background:#111; color:#eee; }
+  :root { --bg: #111; --panel: rgba(20,20,20,0.95); --border: rgba(0, 210, 255, 0.2); --accent: #00d2ff; --text: #eee; }
+  body.light-mode { --bg: #e0e0e0; --panel: rgba(240,240,240,0.95); --border: rgba(0, 150, 200, 0.3); --accent: #0088cc; --text: #222; }
+  body { margin:0; font-family:'Inter',sans-serif; overflow:hidden; background:var(--bg); color:var(--text); transition: background 0.3s; }
   .toolbar { position:absolute; top:10px; right:10px; width:280px; display:flex; flex-direction:column; gap:8px; z-index:100; max-height:95vh; overflow-y:auto; }
   .toolbar::-webkit-scrollbar { width:4px; }
-  .panel-box { background:var(--panel); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:10px; box-shadow:0 4px 12px rgba(0,0,0,0.5); }
+  .panel-box { background:var(--panel); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); transition: background 0.3s; }
   .section-title { font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:0.8; font-weight:600; color:var(--accent); margin-bottom:2px; display:flex; justify-content:space-between; align-items:center; }
-  button { background:transparent; border:1px solid rgba(255,255,255,0.15); color:#ccc; padding:6px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:0.2s; font-size:11px; }
-  button:hover { background:rgba(0,210,255,0.1); border-color:var(--accent); color:white; }
-  button.active { background:var(--accent); color:#000; font-weight:bold; border-color:var(--accent); }
+  button { background:transparent; border:1px solid var(--border); color:var(--text); padding:6px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:0.2s; font-size:11px; opacity:0.8; }
+  button:hover { background:rgba(0,210,255,0.1); border-color:var(--accent); opacity:1; }
+  button.active { background:var(--accent); color:var(--bg); font-weight:bold; border-color:var(--accent); opacity:1; }
   button.danger { border-color:#ff4444; color:#ff8888; }
-  button.danger:hover { background:#ff4444; color:#000; }
+  button.danger:hover { background:#ff4444; color:#fff; }
   .row { display:flex; gap:6px; align-items:center; justify-content:space-between; }
   .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
   .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-  input[type=number], input[type=range] { background:rgba(0,0,0,0.3); border:1px solid var(--border); color:#eee; padding:6px; border-radius:4px; width:50px; text-align:center; }
+  input[type=number], input[type=range] { background:rgba(128,128,128,0.2); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:4px; width:50px; text-align:center; }
   input[type=range] { width:100%; padding:0; height:4px; accent-color:var(--accent); cursor:pointer; }
   input[type=color] { -webkit-appearance:none; border:none; width:100%; height:28px; padding:0; background:none; cursor:pointer; }
   
   .dropdown-container { position:relative; width:100%; } 
   .dropdown-btn { width:100%; justify-content:space-between; text-align:left; }
-  .dropdown-content { display:none; margin-top:8px; grid-template-columns:repeat(3, 1fr); gap:8px; max-height:250px; overflow-y:auto; padding-right:4px; }
+  /* Reverted to expanding flow (removed absolute positioning) */
+  .dropdown-content { display:none; width:100%; background:rgba(0,0,0,0.1); border-radius:4px; padding:4px; grid-template-columns:repeat(3, 1fr); gap:6px; max-height:200px; overflow-y:auto; margin-top:4px; border:1px solid var(--border); }
   .dropdown-content.open { display:grid; }
-  .furn-item { aspect-ratio:1; background:rgba(255,255,255,0.05); border-radius:6px; border:1px solid transparent; cursor:pointer; background-size:80%; background-position:center; background-repeat:no-repeat; position:relative; transition:0.2s; }
+  .furn-item { aspect-ratio:1; background:rgba(128,128,128,0.1); border-radius:6px; border:1px solid transparent; cursor:pointer; background-size:80%; background-position:center; background-repeat:no-repeat; position:relative; transition:0.2s; }
   .furn-item:hover { border-color:var(--accent); background-color:rgba(0,210,255,0.1); }
-  .furn-item span { position:absolute; bottom:0; width:100%; text-align:center; font-size:9px; background:rgba(0,0,0,0.8); padding:2px 0; border-bottom-left-radius:5px; border-bottom-right-radius:5px; }
+  .furn-item span { position:absolute; bottom:0; width:100%; text-align:center; font-size:9px; background:rgba(0,0,0,0.8); color:white; padding:2px 0; border-bottom-left-radius:5px; border-bottom-right-radius:5px; }
   .toggle-switch { display:flex; align-items:center; gap:6px; font-size:11px; cursor:pointer; opacity:0.8; transition:0.2s; }
   .toggle-switch:hover { opacity:1; color:var(--accent); }
   .toggle-checkbox { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; }
@@ -79,7 +81,11 @@ camBtn.onclick = () => {
 vRow.appendChild(camBtn); 
 
 const darkBtn = document.createElement("button"); darkBtn.innerHTML = icons.sun; darkBtn.title = "Toggle Dark/Light Mode";
-darkBtn.onclick = toggleDarkMode; vRow.appendChild(darkBtn);
+darkBtn.onclick = () => {
+    toggleDarkMode();
+    document.body.classList.toggle('light-mode');
+}; 
+vRow.appendChild(darkBtn);
 p1.appendChild(vRow);
 
 const tRow = document.createElement("div"); tRow.className = "grid-3";
@@ -132,7 +138,7 @@ drawBtn.onclick = () => {
         controls.enableRotate = true; state.lastPoint = null; tip.style.display="none"; hidePreview(); 
     }
 };
-p2.insertAdjacentHTML('beforeend', `<div class="row" style="font-size:11px; margin-top:8px; justify-content:space-between; opacity:0.7"><span>Length</span><span id="ui-len" style="color:#00d2ff;font-weight:bold">-</span></div>`);
+p2.insertAdjacentHTML('beforeend', `<div class="row" style="font-size:11px; margin-top:8px; justify-content:space-between; opacity:0.7"><span>Length</span><span id="ui-len" style="color:var(--accent);font-weight:bold">-</span></div>`);
 toolbar.appendChild(p2);
 
 // 3. Environment
@@ -159,29 +165,32 @@ cInput.oninput = e => { if(state.selection[0]) { applyMaterial(state.selection[0
 cInput.onchange = () => saveState();
 cRow.innerHTML = `<span style="font-size:11px">Paint/Tint:</span>`; cRow.appendChild(cInput); p3.appendChild(cRow);
 
-// Floating Texture Dropdown
+// Expanding Texture Dropdown
 const txContainer = document.createElement("div"); txContainer.className = "dropdown-container";
 const txBtn = document.createElement("button"); txBtn.className = "dropdown-btn"; txBtn.innerHTML = `<span>Select Texture</span> ${icons.chevron}`; txBtn.style.marginBottom="8px";
 const txContent = document.createElement("div"); txContent.className = "dropdown-content";
 txBtn.onclick = () => { txContent.classList.toggle("open"); };
 
 Object.keys(wallTextures).forEach(key => {
-    const item = document.createElement("div"); item.className = "furn-item"; // Reuse style
+    const item = document.createElement("div"); item.className = "furn-item"; 
     item.innerHTML = `<span>${key}</span>`;
     
-    // Create Thumbnail
     if (key !== 'Plain') {
-        // Use a simple textured plane for thumbnail
-        const cvs = document.createElement('canvas'); cvs.width=64; cvs.height=64;
-        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#555'; ctx.fillRect(0,0,64,64); // Placeholder
-        item.style.backgroundImage = `url(${wallTextures[key].image ? wallTextures[key].image.src : ''})`;
-        item.style.backgroundColor = '#555';
+        // Use URL directly from the exported config for immediate loading
+        const url = textureURLs[key];
+        if (url) {
+            item.style.backgroundImage = `url(${url})`;
+            item.style.backgroundColor = '#555';
+            
+        }
     } else {
         item.style.backgroundColor = '#888';
     }
 
     item.onclick = () => { 
         if(state.selection[0]) { applyMaterial(state.selection[0], 'texture', key); markDirty(); saveState(); }
+        // Keep open or close based on preference? Usually close.
+        txContent.classList.remove('open');
     };
     txContent.appendChild(item);
 });
@@ -219,7 +228,7 @@ const dropContent = document.createElement("div"); dropContent.className = "drop
 furnContainer.appendChild(dropContent);
 dropBtn.onclick = () => { dropContent.classList.toggle("open"); };
 
-// Hidden Renderer
+// Hidden Renderer for Furniture Thumbnails
 const thumbW = 128, thumbH = 128;
 const tr = new THREE.WebGLRenderer({ antialias: true, alpha: true }); tr.setSize(thumbW, thumbH);
 const ts = new THREE.Scene(); const tc = new THREE.PerspectiveCamera(45, 1, 0.1, 10); tc.position.set(2, 2, 3); tc.lookAt(0, 0.5, 0);
@@ -228,7 +237,8 @@ ts.add(new THREE.DirectionalLight(0xffffff, 2)); ts.add(new THREE.AmbientLight(0
 ["sofa","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable"].forEach(name => {
   const btn = document.createElement("div"); btn.className = "furn-item";
   btn.innerHTML = `<span>${name}</span>`;
-  btn.onclick = () => { loadFurniture(name); }; dropContent.appendChild(btn);
+  btn.onclick = () => { loadFurniture(name); dropContent.classList.remove('open'); }; 
+  dropContent.appendChild(btn);
   
   loader.load(`./public/models/${name}.glb`, gltf => {
     const model = gltf.scene.clone(); const box = new THREE.Box3().setFromObject(model);

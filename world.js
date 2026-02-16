@@ -32,6 +32,10 @@ orthoCamera.position.set(0, 50, 0); orthoCamera.lookAt(0, 0, 0); orthoCamera.zoo
 
 export let activeCamera = orthoCamera;
 
+// EXPOSE TO WINDOW TO FIX "perspcamera not defined" in global callbacks
+window.perspCamera = perspCamera;
+window.orthoCamera = orthoCamera;
+
 // === Controls ===
 export const controls = new OrbitControls(activeCamera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.09; controls.maxPolarAngle = Math.PI / 2.1;
