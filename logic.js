@@ -4,12 +4,11 @@ import { scene, loadTex, loader, activeCamera } from "./world.js";
 import { state } from "./store.js";
 import { clearSelection } from "./interaction.js";
 
-// === Online Texture Registry (Fixed URLs) ===
-// Using GitHub Raw content is more reliable for CORS than direct unpkg hotlinking for textures
+// === Online Texture Registry ===
 const textures = {
   'Plain': null, 
   'Brick': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/brick_diffuse.jpg'),
-  'Concrete': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg'), // Good grey noise texture
+  'Concrete': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg'),
   'Wood': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/hardwood2_diffuse.jpg'),
   'Paper': loadTex('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/uv_grid_opengl.jpg')
 };
@@ -35,7 +34,7 @@ export function buildWall(p1, p2, silent = false) {
   
   wall.position.set((p1.x+p2.x)/2, state.wallHeight/2, (p1.z+p2.z)/2);
   wall.rotation.y = -angle; wall.castShadow = wall.receiveShadow = true;
-  wall.userData = { length: len, color: 'eeeeee', texture: 'Plain', start: nStart, end: nEnd };
+  wall.userData = { length: len, color: 'eeeeee', texture: 'Plain', textureScale: 1, start: nStart, end: nEnd };
   wall.position.y = (state.wallHeight/2) - 0.01;
 
   nStart.userData.walls.push(wall); nEnd.userData.walls.push(wall);
@@ -86,6 +85,7 @@ export function generateFloor() {
     
     const tName = state.floorConfig.texture;
     const tex = textures[tName];
+    const scale = state.floorConfig.scale || 1.0;
     
     const mat = new THREE.MeshStandardMaterial({ 
         color: '#' + state.floorConfig.color, 
@@ -100,7 +100,8 @@ export function generateFloor() {
         cloned.wrapS = cloned.wrapT = THREE.RepeatWrapping;
         const box = new THREE.Box3().setFromPoints(points.map(p=>new THREE.Vector3(p.x,0,p.y)));
         const size = box.getSize(new THREE.Vector3());
-        cloned.repeat.set(size.x / 4, size.z / 4);
+        // Apply Scale to Floor Mapping
+        cloned.repeat.set((size.x / 4) * scale, (size.z / 4) * scale);
         mat.map = cloned;
     }
 
@@ -111,13 +112,55 @@ export function generateFloor() {
     scene.add(mesh); state.floors.push(mesh);
 }
 
-// === Transparency ===
+// === Materials & History ===
+export function applyMaterial(obj, type, value) {
+  // === Floor Handling ===
+  if (state.floors.includes(obj)) {
+      if (type === 'color') state.floorConfig.color = value.replace('#','');
+      if (type === 'texture') state.floorConfig.texture = value;
+      if (type === 'scale') state.floorConfig.scale = parseFloat(value);
+      generateFloor();
+      return;
+  }
+
+  // === Wall Handling ===
+  if (state.placingWall) { 
+      if(type === 'color') obj.userData.color = value.replace('#','');
+      if(type === 'texture') obj.userData.texture = value;
+      return; 
+  }
+  
+  // Handle Texture Scaling or Changing
+  if (type === 'scale') {
+      obj.userData.textureScale = parseFloat(value);
+      // Re-apply current texture to update repeat
+      if (obj.userData.texture && obj.userData.texture !== 'Plain') {
+          applyMaterial(obj, 'texture', obj.userData.texture);
+      }
+      return;
+  }
+
+  const mat = obj.material;
+  if (type === 'color') {
+    mat.map = null; mat.color.set(value); mat.needsUpdate = true;
+    obj.userData.texture = 'Plain'; obj.userData.color = value.replace('#','');
+  } else if (type === 'texture') {
+    const tex = textures[value];
+    if(tex) {
+      const scale = obj.userData.textureScale || 1.0;
+      const cloned = tex.clone(); cloned.source = tex.source; 
+      // Apply Scale to Wall Mapping
+      cloned.repeat.set((obj.userData.length || 1) * scale, state.wallHeight * scale);
+      mat.map = cloned; mat.color.set(0xffffff); mat.needsUpdate = true; obj.userData.texture = value;
+    }
+  }
+}
+
+// ... CheckTransparentWalls, Save, Undo, Redo (Unchanged logic from previous, included below for completeness) ...
 export function checkTransparentWalls() {
     if (!state.transparentWalls || state.placingWall) {
         state.walls.forEach(w => {
-             if(w.material.transparent) {
-                 w.material.opacity = 1.0; w.material.transparent = false; w.material.needsUpdate = true;
-             }
+             if(w.material.transparent) { w.material.opacity = 1.0; w.material.transparent = false; w.material.needsUpdate = true; }
         });
         return;
     }
@@ -126,47 +169,18 @@ export function checkTransparentWalls() {
     dists.forEach((item, index) => {
         const mat = item.wall.material;
         const shouldFade = index < 2;
-        if (shouldFade && (!mat.transparent || mat.opacity > 0.3)) {
-            mat.transparent = true; mat.opacity = 0.2; mat.needsUpdate = true;
-        } else if (!shouldFade && mat.transparent) {
-            mat.transparent = false; mat.opacity = 1.0; mat.needsUpdate = true;
-        }
+        if (shouldFade && (!mat.transparent || mat.opacity > 0.3)) { mat.transparent = true; mat.opacity = 0.2; mat.needsUpdate = true; } 
+        else if (!shouldFade && mat.transparent) { mat.transparent = false; mat.opacity = 1.0; mat.needsUpdate = true; }
     });
-}
-
-// === Materials & History ===
-export function applyMaterial(obj, type, value) {
-  if (state.floors.includes(obj)) {
-      if (type === 'color') state.floorConfig.color = value.replace('#','');
-      if (type === 'texture') state.floorConfig.texture = value;
-      generateFloor();
-      return;
-  }
-
-  if (state.placingWall) { 
-      if(type === 'color') obj.userData.color = value.replace('#','');
-      if(type === 'texture') obj.userData.texture = value;
-      return; 
-  }
-  
-  const mat = obj.material;
-  if (type === 'color') {
-    mat.map = null; mat.color.set(value); mat.needsUpdate = true;
-    obj.userData.texture = 'Plain'; obj.userData.color = value.replace('#','');
-  } else if (type === 'texture') {
-    const tex = textures[value];
-    if(tex) {
-      const cloned = tex.clone(); cloned.source = tex.source; 
-      cloned.repeat.set(obj.userData.length || 1, state.wallHeight);
-      mat.map = cloned; mat.color.set(0xffffff); mat.needsUpdate = true; obj.userData.texture = value;
-    }
-  }
 }
 
 export function saveState() {
   if (state.historyStep < state.history.length - 1) state.history = state.history.slice(0, state.historyStep + 1);
   const s = { 
-      walls: state.walls.map(w => ({p:[w.position.x,w.position.y,w.position.z], rot:w.rotation.y, l:w.userData.length, t:w.userData.texture, c:w.userData.color})), 
+      walls: state.walls.map(w => ({
+          p:[w.position.x,w.position.y,w.position.z], rot:w.rotation.y, l:w.userData.length, 
+          t:w.userData.texture, c:w.userData.color, ts: w.userData.textureScale 
+      })), 
       furniture: state.furniture.map(f => ({m:f.userData.model, p:[f.position.x,f.position.y,f.position.z], r:[f.rotation.x,f.rotation.y,f.rotation.z], s:[f.scale.x,f.scale.y,f.scale.z]})),
       floor: { ...state.floorConfig }
   };
@@ -197,7 +211,7 @@ function restoreSnapshot(d) {
   d.walls.forEach(w => {
      const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
      const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
-     wall.userData.texture = w.t; wall.userData.color = w.c;
+     wall.userData.texture = w.t; wall.userData.color = w.c; wall.userData.textureScale = w.ts || 1.0;
      if(!state.placingWall) {
          if (w.t && w.t !== 'Plain') applyMaterial(wall, 'texture', w.t);
          else applyMaterial(wall, 'color', '#' + w.c);

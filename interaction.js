@@ -5,7 +5,6 @@ import { scene, renderer, activeCamera, controls, floor } from "./world.js";
 import { state, markDirty } from "./store.js";
 import { buildWall, updateConnectedWalls, updateConnectedNodes, saveState, generateFloor } from "./logic.js";
 
-// === Controls ===
 export const transformControls = new TransformControls(activeCamera, renderer.domElement);
 transformControls.setSize(0.8); scene.add(transformControls);
 
@@ -19,7 +18,6 @@ const snap = v => Math.round(v/state.gridSnap)*state.gridSnap;
 const preview = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]), new THREE.LineBasicMaterial({color:0x00d2ff}));
 scene.add(preview); preview.visible = false;
 
-// === Selection & Constraints ===
 export function updateTransformGizmo() {
     const mode = transformControls.getMode();
     const obj = state.selection[state.selection.length-1];
@@ -27,14 +25,12 @@ export function updateTransformGizmo() {
     transformControls.showX = true; transformControls.showY = true; transformControls.showZ = true;
 
     if (obj) {
-        // Walls constraints
         if (state.walls.includes(obj)) {
             if (mode === 'rotate') { transformControls.showX = false; transformControls.showZ = false; }
             else if (mode === 'scale') { transformControls.showX = false; transformControls.showY = false; }
         }
-        // Floor constraints (cannot transform, only select for material)
         if (state.floors.includes(obj)) {
-            transformControls.detach(); // Hide gizmo for floor
+            transformControls.detach();
         }
     }
 }
@@ -59,7 +55,7 @@ export function selectObject(obj, multi = false) {
       if (!state.floors.includes(active)) {
           transformControls.attach(active);
       } else {
-          transformControls.detach(); // Don't allow moving the floor
+          transformControls.detach();
       }
       updateUI(active);
       updateTransformGizmo();
@@ -85,7 +81,6 @@ export function clearSelection() {
   updateUI(null);
 }
 
-// === Visuals ===
 function updateHighlights() {
     const oldGroup = scene.getObjectByName("highlightGroup");
     if(oldGroup) scene.remove(oldGroup);
@@ -93,9 +88,9 @@ function updateHighlights() {
 
     const group = new THREE.Group(); group.name = "highlightGroup";
     state.selection.forEach(obj => {
+        if(state.floors.includes(obj)) return;
         let geo;
-        if (obj.geometry && !state.floors.includes(obj)) geo = new THREE.EdgesGeometry(obj.geometry);
-        else if (state.floors.includes(obj)) return; // Don't outline floor, it's obvious
+        if (obj.geometry) geo = new THREE.EdgesGeometry(obj.geometry);
         else { const box = new THREE.Box3().setFromObject(obj); const helper = new THREE.BoxHelper(obj, 0x00d2ff); group.add(helper); return; }
         
         const mat = new THREE.LineBasicMaterial({ color: 0x00d2ff, depthTest: false });
@@ -109,21 +104,31 @@ function updateHighlights() {
 function updateUI(obj) {
     const el = document.getElementById("ui-len");
     const col = document.getElementById("colInput");
-    const tex = document.getElementById("texSelect");
+    const tex = document.getElementById("texDropdown"); // Updated ID
+    const slide = document.getElementById("scaleSlide");
+    const valSpan = document.getElementById("scaleVal");
     
-    // Reset defaults
     if(el) el.innerText = "-";
 
     if (obj) {
-        // Wall UI
         if (state.walls.includes(obj)) {
             if(el) el.innerText = `${obj.userData.length.toFixed(2)}m`;
             if(col && obj.userData.color) col.value = '#' + obj.userData.color;
-            // No dropdown update as we use thumbnails
+            if(tex && obj.userData.texture) tex.value = obj.userData.texture;
+            if(slide) {
+                const val = obj.userData.textureScale || 0.2;
+                slide.value = val;
+                valSpan.innerText = val + 'x';
+            }
         }
-        // Floor UI
         else if (state.floors.includes(obj)) {
             if(col) col.value = '#' + state.floorConfig.color;
+            if(tex) tex.value = state.floorConfig.texture;
+            if(slide) {
+                const val = state.floorConfig.scale || 0.2;
+                slide.value = val;
+                valSpan.innerText = val + 'x';
+            }
         }
     }
 }
@@ -143,11 +148,8 @@ function updateLabel() {
 export function deleteSelected() {
     if (state.selection.length === 0) return;
     const toDelete = [...state.selection];
-    
     toDelete.forEach(obj => {
-        // Don't delete generated floor
         if(state.floors.includes(obj)) return;
-
         scene.remove(obj);
         if (state.walls.includes(obj)) {
             state.walls = state.walls.filter(w => w !== obj);
@@ -167,7 +169,6 @@ export function deleteSelected() {
     clearSelection(); markDirty(); saveState();
 }
 
-// === Event Handlers ===
 export function setupEvents() {
   window.addEventListener("click", e => {
     if(e.target.closest('.toolbar') || e.target.closest('.dropdown-content')) return;
@@ -186,7 +187,6 @@ export function setupEvents() {
         if(hits.length) { 
            let obj = hits[0].object; 
            if(obj.userData.isNode) { selectObject(obj); return; }
-           // Climb up hierarchy
            while(obj.parent && obj.parent!==scene) obj=obj.parent;
            selectObject(obj, e.shiftKey); 
         } else if(!e.shiftKey) clearSelection();

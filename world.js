@@ -39,8 +39,6 @@ controls.enableDamping = true; controls.dampingFactor = 0.09; controls.maxPolarA
 // === Resources ===
 export const loader = new GLTFLoader();
 export const textureLoader = new THREE.TextureLoader();
-
-// FIX: Enable Cross-Origin requests for external textures
 textureLoader.setCrossOrigin('anonymous');
 
 export const loadTex = (path) => {
@@ -70,19 +68,33 @@ export function updateSun() {
 }
 updateSun();
 
-// === Dynamic Grid ===
+// === Dynamic Grid & Dark Mode ===
 export let gridHelper, floor;
+
 export function updateGrid(size) {
     if(gridHelper) scene.remove(gridHelper);
     if(floor) scene.remove(floor);
     state.gridSize = size;
-    gridHelper = new THREE.GridHelper(size, size, 0x00d2ff, 0x333333); 
+    
+    // Colors based on mode
+    const gridCol1 = state.isDarkMode ? 0x00d2ff : 0x888888;
+    const gridCol2 = state.isDarkMode ? 0x333333 : 0xcccccc;
+    const floorCol = state.isDarkMode ? 0x1a1a1a : 0xf0f0f0;
+
+    gridHelper = new THREE.GridHelper(size, size, gridCol1, gridCol2); 
     scene.add(gridHelper);
-    floor = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 }));
+    floor = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ color: floorCol, roughness: 0.9 }));
     floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; floor.position.y = -0.01; 
     scene.add(floor);
 }
 updateGrid(state.gridSize);
+
+export function toggleDarkMode() {
+    state.isDarkMode = !state.isDarkMode;
+    scene.background.set(state.isDarkMode ? 0x111111 : 0xe0e0e0);
+    // Rebuild grid to update colors
+    updateGrid(state.gridSize);
+}
 
 export function setActiveCamera(cam) {
   activeCamera = cam; controls.object = activeCamera;

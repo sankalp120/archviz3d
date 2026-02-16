@@ -17,10 +17,10 @@ export const state = {
   gridSize: 20,
   sunIntensity: 1.2,
   sunRotation: 0.5,
-  // New: Default Floor Configuration
   floorConfig: { 
       texture: 'Wood', 
-      color: 'ffffff' 
+      color: 'ffffff',
+      scale: .2
   },
   MAX_HISTORY: 50
 };

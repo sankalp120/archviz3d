@@ -1,9 +1,9 @@
 // main.js
 import * as THREE from "three";
-import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, handleResize, loader, updateGrid, updateSun } from "./world.js";
+import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, perspCamera, handleResize, loader, updateGrid, updateSun, toggleDarkMode } from "./world.js";
 import { state, markDirty } from "./store.js";
 import { setupEvents, transformControls, clearSelection, selectObject, deleteSelected, selectAll, hidePreview, setGizmoMode } from "./interaction.js";
-import { applyMaterial, undo, redo, saveState, checkTransparentWalls } from "./logic.js";
+import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures } from "./logic.js";
 
 function loadFurniture(name) {
   loader.load(`./public/models/${name}.glb`, (gltf) => {
@@ -22,7 +22,8 @@ const icons = {
   undo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>`,
   redo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>`,
   save: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>`,
-  chevron: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`
+  chevron: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`,
+  sun: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`
 };
 
 const style = document.createElement('style');
@@ -45,10 +46,7 @@ style.textContent = `
   input[type=number], input[type=range] { background:rgba(0,0,0,0.3); border:1px solid var(--border); color:#eee; padding:6px; border-radius:4px; width:50px; text-align:center; }
   input[type=range] { width:100%; padding:0; height:4px; accent-color:var(--accent); cursor:pointer; }
   input[type=color] { -webkit-appearance:none; border:none; width:100%; height:28px; padding:0; background:none; cursor:pointer; }
-  .thumb-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
-  .thumb-btn { aspect-ratio:1; border:1px solid rgba(255,255,255,0.1); border-radius:4px; background-size:cover; background-position:center; cursor:pointer; position:relative; transition:0.2s; }
-  .thumb-btn:hover { border-color:var(--accent); transform:scale(1.05); }
-  .thumb-label { position:absolute; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.7); font-size:8px; text-align:center; color:white; padding:2px 0; border-bottom-left-radius:3px; border-bottom-right-radius:3px; }
+  
   .dropdown-container { position:relative; width:100%; } 
   .dropdown-btn { width:100%; justify-content:space-between; text-align:left; }
   .dropdown-content { display:none; margin-top:8px; grid-template-columns:repeat(3, 1fr); gap:8px; max-height:250px; overflow-y:auto; padding-right:4px; }
@@ -60,15 +58,30 @@ style.textContent = `
   .toggle-switch:hover { opacity:1; color:var(--accent); }
   .toggle-checkbox { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; }
   #tooltip { position:absolute; background:var(--accent); color:#000; padding:4px 8px; border-radius:4px; pointer-events:none; display:none; font-weight:bold; font-size:11px; transform:translate(15px,-15px); box-shadow:0 0 10px rgba(0,210,255,0.4); z-index:200; }
+  
+  #scaleVal { width:32px; text-align:right; color:var(--accent); font-weight:bold; font-size:11px; }
 `;
 document.head.appendChild(style);
 
 const toolbar = document.createElement("div"); toolbar.className = "toolbar"; document.body.appendChild(toolbar);
 const tip = document.createElement("div"); tip.id = "tooltip"; document.body.appendChild(tip);
 
-// 1. Transform Tools
+// 1. View & Transform
 const p1 = document.createElement("div"); p1.className = "panel-box";
-p1.innerHTML = `<div class="section-title">Tools</div>`;
+p1.innerHTML = `<div class="section-title">View & Tools</div>`;
+const vRow = document.createElement("div"); vRow.className = "row"; vRow.style.marginBottom="8px";
+const camBtn = document.createElement("button"); camBtn.innerHTML = `2D / 3D`; camBtn.style.flex="1";
+camBtn.onclick = () => {
+    const isOrtho = activeCamera === orthoCamera;
+    setActiveCamera(isOrtho ? perspCamera : orthoCamera);
+    camBtn.classList.toggle('active', !isOrtho);
+};
+vRow.appendChild(camBtn); 
+
+const darkBtn = document.createElement("button"); darkBtn.innerHTML = icons.sun; darkBtn.title = "Toggle Dark/Light Mode";
+darkBtn.onclick = toggleDarkMode; vRow.appendChild(darkBtn);
+p1.appendChild(vRow);
+
 const tRow = document.createElement("div"); tRow.className = "grid-3";
 const moveBtn = document.createElement("button"); moveBtn.innerHTML = `${icons.move} Move`; moveBtn.onclick = () => setTool('translate', moveBtn);
 const rotBtn = document.createElement("button"); rotBtn.innerHTML = `${icons.rotate} Rot`; rotBtn.onclick = () => setTool('rotate', rotBtn);
@@ -82,7 +95,7 @@ function setTool(mode, btn) {
 }
 setTool('translate', moveBtn);
 
-// 2. Wall Construction
+// 2. Construction
 const p2 = document.createElement("div"); p2.className = "panel-box";
 p2.innerHTML = `<div class="section-title">Construction</div>`;
 const wRow = document.createElement("div"); wRow.className = "row";
@@ -113,7 +126,6 @@ drawBtn.onclick = () => {
         w.material = state.placingWall ? new THREE.MeshBasicMaterial({color:0x999999}) : new THREE.MeshStandardMaterial({color:0xeeeeee});
         if(!state.placingWall) applyMaterial(w, w.userData.texture!=='Plain'?'texture':'color', w.userData.texture!=='Plain'?w.userData.texture:'#'+w.userData.color);
     });
-    
     if(state.placingWall) { 
         setActiveCamera(orthoCamera); controls.enableRotate = false; controls.reset(); clearSelection(); 
     } else { 
@@ -131,7 +143,6 @@ intRow.innerHTML = `<span style="font-size:11px">Intensity</span>`;
 const intSlide = document.createElement("input"); intSlide.type = "range"; intSlide.min="0"; intSlide.max="2"; intSlide.step="0.1"; intSlide.value=state.sunIntensity;
 intSlide.oninput = e => { state.sunIntensity = parseFloat(e.target.value); updateSun(); };
 intRow.appendChild(intSlide); pEnv.appendChild(intRow);
-
 const rotRow = document.createElement("div"); rotRow.className = "row";
 rotRow.innerHTML = `<span style="font-size:11px">Rotation</span>`;
 const rotSlide = document.createElement("input"); rotSlide.type = "range"; rotSlide.min="0"; rotSlide.max="6.28"; rotSlide.step="0.1"; rotSlide.value=state.sunRotation;
@@ -148,21 +159,54 @@ cInput.oninput = e => { if(state.selection[0]) { applyMaterial(state.selection[0
 cInput.onchange = () => saveState();
 cRow.innerHTML = `<span style="font-size:11px">Paint/Tint:</span>`; cRow.appendChild(cInput); p3.appendChild(cRow);
 
-const tGrid = document.createElement("div"); tGrid.className = "thumb-grid";
-const textures = [
-    { name: 'Plain', img: null, color: '#999' },
-    { name: 'Brick', img: 'https://unpkg.com/three@0.160.0/examples/textures/brick_diffuse.jpg', color: '#833' },
-    { name: 'Concrete', img: 'https://unpkg.com/three@0.160.0/examples/textures/planets/moon_1024.jpg', color: '#555' },
-    { name: 'Wood', img: 'https://unpkg.com/three@0.160.0/examples/textures/hardwood2_diffuse.jpg', color: '#d95' },
-    { name: 'Paper', img: 'https://unpkg.com/three@0.160.0/examples/textures/uv_grid_opengl.jpg', color: '#ffe' }
-];
-textures.forEach(tex => {
-    const btn = document.createElement("div"); btn.className = "thumb-btn";
-    if(tex.img) btn.style.backgroundImage = `url(${tex.img})`; else btn.style.backgroundColor = tex.color;
-    btn.onclick = () => { if(state.selection[0]) { applyMaterial(state.selection[0], 'texture', tex.name); markDirty(); saveState(); }};
-    btn.innerHTML = `<div class="thumb-label">${tex.name}</div>`; tGrid.appendChild(btn);
+// Floating Texture Dropdown
+const txContainer = document.createElement("div"); txContainer.className = "dropdown-container";
+const txBtn = document.createElement("button"); txBtn.className = "dropdown-btn"; txBtn.innerHTML = `<span>Select Texture</span> ${icons.chevron}`; txBtn.style.marginBottom="8px";
+const txContent = document.createElement("div"); txContent.className = "dropdown-content";
+txBtn.onclick = () => { txContent.classList.toggle("open"); };
+
+Object.keys(wallTextures).forEach(key => {
+    const item = document.createElement("div"); item.className = "furn-item"; // Reuse style
+    item.innerHTML = `<span>${key}</span>`;
+    
+    // Create Thumbnail
+    if (key !== 'Plain') {
+        // Use a simple textured plane for thumbnail
+        const cvs = document.createElement('canvas'); cvs.width=64; cvs.height=64;
+        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#555'; ctx.fillRect(0,0,64,64); // Placeholder
+        item.style.backgroundImage = `url(${wallTextures[key].image ? wallTextures[key].image.src : ''})`;
+        item.style.backgroundColor = '#555';
+    } else {
+        item.style.backgroundColor = '#888';
+    }
+
+    item.onclick = () => { 
+        if(state.selection[0]) { applyMaterial(state.selection[0], 'texture', key); markDirty(); saveState(); }
+    };
+    txContent.appendChild(item);
 });
-p3.appendChild(tGrid); toolbar.appendChild(p3);
+txContainer.append(txBtn, txContent);
+p3.appendChild(txContainer);
+
+// Mapping Slider
+const scRow = document.createElement("div"); scRow.className = "row";
+const scSlide = document.createElement("input"); scSlide.type = "range"; scSlide.id = "scaleSlide";
+scSlide.min = "0.1"; scSlide.max = "3.0"; scSlide.step = "0.1"; scSlide.value = "0.2";
+const scVal = document.createElement("span"); scVal.id = "scaleVal"; scVal.innerText = "0.2x";
+
+scSlide.oninput = (e) => { 
+    scVal.innerText = e.target.value + 'x';
+    if(state.selection[0]) { 
+        applyMaterial(state.selection[0], 'scale', e.target.value); 
+        markDirty(); 
+    }
+};
+scSlide.onchange = () => saveState();
+
+scRow.innerHTML = `<span style="font-size:11px">Mapping:</span>`; 
+scRow.append(scSlide, scVal); 
+p3.appendChild(scRow);
+toolbar.appendChild(p3);
 
 // 5. Furniture
 const p5 = document.createElement("div"); p5.className = "panel-box";
