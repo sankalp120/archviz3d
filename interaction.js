@@ -126,13 +126,45 @@ function updateLabel() {
 
 export function deleteSelected() {
     if (state.selection.length === 0) return;
-    state.selection.forEach(obj => {
+    
+    // Copy array to avoid mutation issues during iteration
+    const toDelete = [...state.selection];
+
+    toDelete.forEach(obj => {
         scene.remove(obj);
-        if (state.walls.includes(obj)) state.walls = state.walls.filter(w => w !== obj);
-        if (state.furniture.includes(obj)) state.furniture = state.furniture.filter(f => f !== obj);
+        
+        // Handle Wall Deletion
+        if (state.walls.includes(obj)) {
+            state.walls = state.walls.filter(w => w !== obj);
+            
+            // Clean up Nodes connected to this wall
+            const nodes = [obj.userData.start, obj.userData.end];
+            nodes.forEach(n => {
+                if (n) {
+                    // Remove wall reference from node
+                    n.userData.walls = n.userData.walls.filter(w => w !== obj);
+                    
+                    // If node is orphan (no connected walls), delete it
+                    if (n.userData.walls.length === 0) {
+                        scene.remove(n);
+                        state.nodes = state.nodes.filter(node => node !== n);
+                    }
+                }
+            });
+        }
+        
+        // Handle Furniture Deletion
+        if (state.furniture.includes(obj)) {
+            state.furniture = state.furniture.filter(f => f !== obj);
+        }
     });
+
+    // Re-evaluate floor (will delete floor if nodes < 3)
     generateFloor();
-    clearSelection(); markDirty(); saveState();
+    
+    clearSelection(); 
+    markDirty(); 
+    saveState();
 }
 
 // === Event Handlers ===
