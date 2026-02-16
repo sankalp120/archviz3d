@@ -15,8 +15,13 @@ export const state = {
   wallHeight: 3,
   gridSnap: 0.5,
   gridSize: 20,
-  sunIntensity: 1.2, // New
-  sunRotation: 0.5,  // New
+  sunIntensity: 1.2,
+  sunRotation: 0.5,
+  // New: Default Floor Configuration
+  floorConfig: { 
+      texture: 'Wood', 
+      color: 'ffffff' 
+  },
   MAX_HISTORY: 50
 };
 

@@ -66,7 +66,7 @@ document.head.appendChild(style);
 const toolbar = document.createElement("div"); toolbar.className = "toolbar"; document.body.appendChild(toolbar);
 const tip = document.createElement("div"); tip.id = "tooltip"; document.body.appendChild(tip);
 
-// 1. Transform
+// 1. Transform Tools
 const p1 = document.createElement("div"); p1.className = "panel-box";
 p1.innerHTML = `<div class="section-title">Tools</div>`;
 const tRow = document.createElement("div"); tRow.className = "grid-3";
@@ -82,7 +82,7 @@ function setTool(mode, btn) {
 }
 setTool('translate', moveBtn);
 
-// 2. Construction
+// 2. Wall Construction
 const p2 = document.createElement("div"); p2.className = "panel-box";
 p2.innerHTML = `<div class="section-title">Construction</div>`;
 const wRow = document.createElement("div"); wRow.className = "row";
@@ -108,7 +108,6 @@ drawBtn.onclick = () => {
     state.placingWall = !state.placingWall;
     drawBtn.innerText = state.placingWall ? "Stop Drawing" : "Draw Wall";
     drawBtn.classList.toggle("active", state.placingWall);
-    // Note: Removed the node visibility loop here to keep them hidden as requested
     state.walls.forEach(w => {
         w.children[0].visible = state.placingWall;
         w.material = state.placingWall ? new THREE.MeshBasicMaterial({color:0x999999}) : new THREE.MeshStandardMaterial({color:0xeeeeee});
@@ -147,15 +146,15 @@ const cRow = document.createElement("div"); cRow.className = "row"; cRow.style.m
 const cInput = document.createElement("input"); cInput.type="color"; cInput.id="colInput"; cInput.value="#eeeeee";
 cInput.oninput = e => { if(state.selection[0]) { applyMaterial(state.selection[0], 'color', e.target.value); markDirty(); }};
 cInput.onchange = () => saveState();
-cRow.innerHTML = `<span style="font-size:11px">Paint Color:</span>`; cRow.appendChild(cInput); p3.appendChild(cRow);
+cRow.innerHTML = `<span style="font-size:11px">Paint/Tint:</span>`; cRow.appendChild(cInput); p3.appendChild(cRow);
 
 const tGrid = document.createElement("div"); tGrid.className = "thumb-grid";
 const textures = [
     { name: 'Plain', img: null, color: '#999' },
-    { name: 'Brick', img: './public/textures/brick.jpg', color: '#833' },
-    { name: 'Concrete', img: './public/textures/concrete.jpg', color: '#555' },
-    { name: 'Wood', img: './public/textures/wood.jpg', color: '#d95' },
-    { name: 'Paper', img: './public/textures/wallpaper.jpg', color: '#ffe' }
+    { name: 'Brick', img: 'https://unpkg.com/three@0.160.0/examples/textures/brick_diffuse.jpg', color: '#833' },
+    { name: 'Concrete', img: 'https://unpkg.com/three@0.160.0/examples/textures/planets/moon_1024.jpg', color: '#555' },
+    { name: 'Wood', img: 'https://unpkg.com/three@0.160.0/examples/textures/hardwood2_diffuse.jpg', color: '#d95' },
+    { name: 'Paper', img: 'https://unpkg.com/three@0.160.0/examples/textures/uv_grid_opengl.jpg', color: '#ffe' }
 ];
 textures.forEach(tex => {
     const btn = document.createElement("div"); btn.className = "thumb-btn";

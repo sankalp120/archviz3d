@@ -22,7 +22,7 @@ const aspect = w / h;
 export const perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
 perspCamera.position.set(0, 35, 20); perspCamera.lookAt(0, 0, 0);
 
-const viewSize = 11;
+const viewSize = 8;
 export const orthoCamera = new THREE.OrthographicCamera(
   -viewSize * aspect, viewSize * aspect, 
   viewSize, -viewSize, 
@@ -39,9 +39,15 @@ controls.enableDamping = true; controls.dampingFactor = 0.09; controls.maxPolarA
 // === Resources ===
 export const loader = new GLTFLoader();
 export const textureLoader = new THREE.TextureLoader();
+
+// FIX: Enable Cross-Origin requests for external textures
+textureLoader.setCrossOrigin('anonymous');
+
 export const loadTex = (path) => {
-  const t = textureLoader.load(path); t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  const t = textureLoader.load(path); 
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; 
+  return t;
 };
 
 // === Environment ===
@@ -62,7 +68,7 @@ export function updateSun() {
     dirLight.position.y = 20;
     dirLight.lookAt(0,0,0);
 }
-updateSun(); // Init
+updateSun();
 
 // === Dynamic Grid ===
 export let gridHelper, floor;

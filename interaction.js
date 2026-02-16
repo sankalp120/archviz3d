@@ -26,15 +26,15 @@ export function updateTransformGizmo() {
     
     transformControls.showX = true; transformControls.showY = true; transformControls.showZ = true;
 
-    if (obj && state.walls.includes(obj)) {
-        if (mode === 'rotate') {
-            transformControls.showX = false;
-            transformControls.showZ = false;
-            transformControls.showY = true;
-        } else if (mode === 'scale') {
-            transformControls.showX = false;
-            transformControls.showY = false;
-            transformControls.showZ = true; // Thickness Only
+    if (obj) {
+        // Walls constraints
+        if (state.walls.includes(obj)) {
+            if (mode === 'rotate') { transformControls.showX = false; transformControls.showZ = false; }
+            else if (mode === 'scale') { transformControls.showX = false; transformControls.showY = false; }
+        }
+        // Floor constraints (cannot transform, only select for material)
+        if (state.floors.includes(obj)) {
+            transformControls.detach(); // Hide gizmo for floor
         }
     }
 }
@@ -56,7 +56,11 @@ export function selectObject(obj, multi = false) {
 
   if (state.selection.length > 0) {
       const active = state.selection[state.selection.length - 1];
-      transformControls.attach(active);
+      if (!state.floors.includes(active)) {
+          transformControls.attach(active);
+      } else {
+          transformControls.detach(); // Don't allow moving the floor
+      }
       updateUI(active);
       updateTransformGizmo();
   } else {
@@ -90,7 +94,8 @@ function updateHighlights() {
     const group = new THREE.Group(); group.name = "highlightGroup";
     state.selection.forEach(obj => {
         let geo;
-        if (obj.geometry) geo = new THREE.EdgesGeometry(obj.geometry);
+        if (obj.geometry && !state.floors.includes(obj)) geo = new THREE.EdgesGeometry(obj.geometry);
+        else if (state.floors.includes(obj)) return; // Don't outline floor, it's obvious
         else { const box = new THREE.Box3().setFromObject(obj); const helper = new THREE.BoxHelper(obj, 0x00d2ff); group.add(helper); return; }
         
         const mat = new THREE.LineBasicMaterial({ color: 0x00d2ff, depthTest: false });
@@ -105,11 +110,22 @@ function updateUI(obj) {
     const el = document.getElementById("ui-len");
     const col = document.getElementById("colInput");
     const tex = document.getElementById("texSelect");
-    if (obj && state.walls.includes(obj)) {
-        if(el) el.innerText = `${obj.userData.length.toFixed(2)}m`;
-        if(col && obj.userData.color) col.value = '#' + obj.userData.color;
-        if(tex && obj.userData.texture) tex.value = obj.userData.texture;
-    } else if(el) el.innerText = "-";
+    
+    // Reset defaults
+    if(el) el.innerText = "-";
+
+    if (obj) {
+        // Wall UI
+        if (state.walls.includes(obj)) {
+            if(el) el.innerText = `${obj.userData.length.toFixed(2)}m`;
+            if(col && obj.userData.color) col.value = '#' + obj.userData.color;
+            // No dropdown update as we use thumbnails
+        }
+        // Floor UI
+        else if (state.floors.includes(obj)) {
+            if(col) col.value = '#' + state.floorConfig.color;
+        }
+    }
 }
 
 function updateLabel() {
@@ -126,45 +142,29 @@ function updateLabel() {
 
 export function deleteSelected() {
     if (state.selection.length === 0) return;
-    
-    // Copy array to avoid mutation issues during iteration
     const toDelete = [...state.selection];
-
+    
     toDelete.forEach(obj => {
+        // Don't delete generated floor
+        if(state.floors.includes(obj)) return;
+
         scene.remove(obj);
-        
-        // Handle Wall Deletion
         if (state.walls.includes(obj)) {
             state.walls = state.walls.filter(w => w !== obj);
-            
-            // Clean up Nodes connected to this wall
             const nodes = [obj.userData.start, obj.userData.end];
             nodes.forEach(n => {
                 if (n) {
-                    // Remove wall reference from node
                     n.userData.walls = n.userData.walls.filter(w => w !== obj);
-                    
-                    // If node is orphan (no connected walls), delete it
                     if (n.userData.walls.length === 0) {
-                        scene.remove(n);
-                        state.nodes = state.nodes.filter(node => node !== n);
+                        scene.remove(n); state.nodes = state.nodes.filter(node => node !== n);
                     }
                 }
             });
         }
-        
-        // Handle Furniture Deletion
-        if (state.furniture.includes(obj)) {
-            state.furniture = state.furniture.filter(f => f !== obj);
-        }
+        if (state.furniture.includes(obj)) state.furniture = state.furniture.filter(f => f !== obj);
     });
-
-    // Re-evaluate floor (will delete floor if nodes < 3)
     generateFloor();
-    
-    clearSelection(); 
-    markDirty(); 
-    saveState();
+    clearSelection(); markDirty(); saveState();
 }
 
 // === Event Handlers ===
@@ -178,17 +178,15 @@ export function setupEvents() {
         const hits = raycaster.intersectObject(floor);
         if(hits.length) {
             let pt = hits[0].point; pt.x=snap(pt.x); pt.z=snap(pt.z); pt.y=0;
-            if(state.lastPoint) { 
-                buildWall(state.lastPoint, pt); 
-                saveState(); 
-                state.lastPoint = pt; 
-            } else state.lastPoint = pt;
+            if(state.lastPoint) { buildWall(state.lastPoint, pt); saveState(); state.lastPoint = pt; } 
+            else state.lastPoint = pt;
         }
     } else {
-        const hits = raycaster.intersectObjects([...state.walls, ...state.furniture, ...state.nodes], true);
+        const hits = raycaster.intersectObjects([...state.walls, ...state.furniture, ...state.nodes, ...state.floors], true);
         if(hits.length) { 
            let obj = hits[0].object; 
            if(obj.userData.isNode) { selectObject(obj); return; }
+           // Climb up hierarchy
            while(obj.parent && obj.parent!==scene) obj=obj.parent;
            selectObject(obj, e.shiftKey); 
         } else if(!e.shiftKey) clearSelection();
@@ -213,8 +211,8 @@ export function setupEvents() {
   transformControls.addEventListener("change", () => {
     if(state.selection.length === 0) return;
     const obj = state.selection[state.selection.length-1];
-    if(obj.userData.isNode) updateConnectedWalls(obj);
-    else if(state.walls.includes(obj)) { 
+    if(obj && obj.userData.isNode) updateConnectedWalls(obj);
+    else if(obj && state.walls.includes(obj)) { 
         obj.position.x = snap(obj.position.x); obj.position.z = snap(obj.position.z);
         updateConnectedNodes(obj); 
     }
