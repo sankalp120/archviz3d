@@ -3,17 +3,20 @@ export const state = {
   walls: [],
   furniture: [],
   nodes: [],
+  floors: [],
   selection: [],
   history: [],
   historyStep: -1,
   placingWall: false,
-  transparentWalls: false, // Feature Toggle
+  transparentWalls: false,
   lastPoint: null,
   isDarkMode: true,
   dirty: false,
   wallHeight: 3,
   gridSnap: 0.5,
-  gridSize: 20, // Mutable Grid Size
+  gridSize: 20,
+  sunIntensity: 1.2, // New
+  sunRotation: 0.5,  // New
   MAX_HISTORY: 50
 };
 

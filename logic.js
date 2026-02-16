@@ -15,7 +15,11 @@ export function createNode(pos) {
   const existing = state.nodes.find(n => n.position.distanceTo(pos) < 0.1);
   if (existing) return existing;
   const node = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({ color: 0x00d2ff, transparent: true, opacity: 0.5 }));
-  node.position.copy(pos); node.userData = { isNode: true, walls: [] }; node.visible = false;
+  node.position.copy(pos); node.userData = { isNode: true, walls: [] }; 
+  
+  // UPDATED: Nodes are always invisible to avoid clutter
+  node.visible = false; 
+  
   scene.add(node); state.nodes.push(node);
   return node;
 }
@@ -36,9 +40,12 @@ export function buildWall(p1, p2, silent = false) {
 
   nStart.userData.walls.push(wall); nEnd.userData.walls.push(wall);
   scene.add(wall); state.walls.push(wall);
+  
+  if(!silent) generateFloor();
   return wall;
 }
 
+// === Elasticity ===
 export function updateConnectedWalls(node) {
   node.userData.walls.forEach(w => {
     const n1 = w.userData.start, n2 = w.userData.end;
@@ -46,20 +53,52 @@ export function updateConnectedWalls(node) {
     const len = Math.sqrt(dx*dx+dz*dz), angle = Math.atan2(dz, dx);
     w.position.set((n1.position.x+n2.position.x)/2, state.wallHeight/2, (n1.position.z+n2.position.z)/2);
     w.rotation.y = -angle; w.userData.length = len;
+    
     w.geometry.dispose(); w.geometry = new THREE.BoxGeometry(len, state.wallHeight, 0.2);
     w.children[0].geometry.dispose(); w.children[0].geometry = new THREE.EdgesGeometry(w.geometry);
+    
     if (w.userData.texture && w.userData.texture !== 'Plain') applyMaterial(w, 'texture', w.userData.texture);
   });
+  generateFloor();
 }
 
 export function updateConnectedNodes(wall) {
   const len = wall.userData.length, ang = -wall.rotation.y;
   const dx = (len/2)*Math.cos(ang), dz = (len/2)*Math.sin(ang);
+  
   wall.userData.start.position.set(wall.position.x - dx, 0, wall.position.z - dz);
   wall.userData.end.position.set(wall.position.x + dx, 0, wall.position.z + dz);
+  
+  updateConnectedWalls(wall.userData.start);
+  updateConnectedWalls(wall.userData.end);
 }
 
-// === Smart Transparency ===
+// === Floor Generation ===
+export function generateFloor() {
+    state.floors.forEach(f => scene.remove(f)); state.floors = [];
+    if (state.nodes.length < 3) return;
+
+    // Use node positions to create a floor polygon
+    const points = state.nodes.map(n => new THREE.Vector2(n.position.x, n.position.z));
+    
+    // Sort points around center to create a valid shape (Convex Hull approximation)
+    const center = new THREE.Vector2();
+    points.forEach(p => center.add(p)); center.divideScalar(points.length);
+    points.sort((a,b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
+
+    const shape = new THREE.Shape(points);
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(Math.PI / 2);
+    
+    const mat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8, metalness: 0.2, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 0.02; // Slightly above grid to avoid z-fighting
+    mesh.receiveShadow = true;
+    
+    scene.add(mesh); state.floors.push(mesh);
+}
+
+// === Transparency ===
 export function checkTransparentWalls() {
     if (!state.transparentWalls || state.placingWall) {
         state.walls.forEach(w => {
@@ -69,10 +108,8 @@ export function checkTransparentWalls() {
         });
         return;
     }
-
     const dists = state.walls.map(w => ({ wall: w, dist: w.position.distanceTo(activeCamera.position) }));
     dists.sort((a,b) => a.dist - b.dist);
-
     dists.forEach((item, index) => {
         const mat = item.wall.material;
         const shouldFade = index < 2;
@@ -84,7 +121,7 @@ export function checkTransparentWalls() {
     });
 }
 
-// === Materials ===
+// === Materials & History ===
 export function applyMaterial(wall, type, value) {
   if (state.placingWall) { 
       if(type === 'color') wall.userData.color = value.replace('#','');
@@ -104,32 +141,13 @@ export function applyMaterial(wall, type, value) {
   }
 }
 
-// === History (Undo/Redo) ===
 export function saveState() {
-  // If we are in the middle of the stack, remove the future
-  if (state.historyStep < state.history.length - 1) {
-      state.history = state.history.slice(0, state.historyStep + 1);
-  }
-
-  const snapshot = { 
-      walls: state.walls.map(w => ({
-          p:[w.position.x,w.position.y,w.position.z], 
-          rot:w.rotation.y, 
-          l:w.userData.length, 
-          t:w.userData.texture, 
-          c:w.userData.color
-      })), 
-      furniture: state.furniture.map(f => ({
-          m:f.userData.model, 
-          p:[f.position.x,f.position.y,f.position.z], 
-          r:[f.rotation.x,f.rotation.y,f.rotation.z], 
-          s:[f.scale.x,f.scale.y,f.scale.z]
-      })) 
+  if (state.historyStep < state.history.length - 1) state.history = state.history.slice(0, state.historyStep + 1);
+  const s = { 
+      walls: state.walls.map(w => ({p:[w.position.x,w.position.y,w.position.z], rot:w.rotation.y, l:w.userData.length, t:w.userData.texture, c:w.userData.color})), 
+      furniture: state.furniture.map(f => ({m:f.userData.model, p:[f.position.x,f.position.y,f.position.z], r:[f.rotation.x,f.rotation.y,f.rotation.z], s:[f.scale.x,f.scale.y,f.scale.z]})) 
   };
-  
-  state.history.push(JSON.stringify(snapshot));
-  if (state.history.length > state.MAX_HISTORY) state.history.shift();
-  else state.historyStep++;
+  state.history.push(JSON.stringify(s)); state.historyStep++;
 }
 
 export function undo() {
@@ -146,14 +164,11 @@ export function redo() {
 }
 
 function restoreSnapshot(d) {
-  clearSelection(); // Detach controls to prevent ghost interactions
-  
-  // Clear Scene
+  clearSelection();
   state.walls.forEach(w => scene.remove(w)); state.walls = [];
   state.furniture.forEach(f => scene.remove(f)); state.furniture = [];
   state.nodes.forEach(n => scene.remove(n)); state.nodes = [];
   
-  // Rebuild Walls
   d.walls.forEach(w => {
      const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
      const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
@@ -163,16 +178,13 @@ function restoreSnapshot(d) {
          else applyMaterial(wall, 'color', '#' + w.c);
      }
   });
-
-  // Rebuild Furniture
   d.furniture.forEach(f => {
     loader.load(`./public/models/${f.m}.glb`, (g) => {
-        const m = g.scene; m.userData.model=f.m; 
-        m.position.set(...f.p); m.rotation.set(...f.r); m.scale.set(...f.s);
-        m.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
+        const m = g.scene; m.userData.model=f.m; m.position.set(...f.p); m.rotation.set(...f.r); m.scale.set(...f.s);
         scene.add(m); state.furniture.push(m);
     });
   });
+  generateFloor();
 }
 
 export { wallTextures };
