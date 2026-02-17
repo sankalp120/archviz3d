@@ -50,7 +50,6 @@ style.textContent = `
   
   .dropdown-container { position:relative; width:100%; } 
   .dropdown-btn { width:100%; justify-content:space-between; text-align:left; }
-  /* Reverted to expanding flow (removed absolute positioning) */
   .dropdown-content { display:none; width:100%; background:rgba(0,0,0,0.1); border-radius:4px; padding:4px; grid-template-columns:repeat(3, 1fr); gap:6px; max-height:200px; overflow-y:auto; margin-top:4px; border:1px solid var(--border); }
   .dropdown-content.open { display:grid; }
   .furn-item { aspect-ratio:1; background:rgba(128,128,128,0.1); border-radius:6px; border:1px solid transparent; cursor:pointer; background-size:80%; background-position:center; background-repeat:no-repeat; position:relative; transition:0.2s; }
@@ -161,7 +160,19 @@ const p3 = document.createElement("div"); p3.className = "panel-box";
 p3.innerHTML = `<div class="section-title">Appearance</div>`;
 const cRow = document.createElement("div"); cRow.className = "row"; cRow.style.marginBottom="8px";
 const cInput = document.createElement("input"); cInput.type="color"; cInput.id="colInput"; cInput.value="#eeeeee";
-cInput.oninput = e => { if(state.selection[0]) { applyMaterial(state.selection[0], 'color', e.target.value); markDirty(); }};
+
+// UPDATED: Apply color to ALL selected items
+cInput.oninput = e => { 
+    if(state.selection.length > 0) {
+        state.selection.forEach(obj => {
+            // Only apply to walls/floors to prevent crashing on furniture/nodes
+            if (state.walls.includes(obj) || state.floors.includes(obj)) {
+                applyMaterial(obj, 'color', e.target.value); 
+            }
+        });
+        markDirty(); 
+    }
+};
 cInput.onchange = () => saveState();
 cRow.innerHTML = `<span style="font-size:11px">Paint/Tint:</span>`; cRow.appendChild(cInput); p3.appendChild(cRow);
 
@@ -176,20 +187,26 @@ Object.keys(wallTextures).forEach(key => {
     item.innerHTML = `<span>${key}</span>`;
     
     if (key !== 'Plain') {
-        // Use URL directly from the exported config for immediate loading
         const url = textureURLs[key];
         if (url) {
             item.style.backgroundImage = `url(${url})`;
             item.style.backgroundColor = '#555';
-            
         }
     } else {
         item.style.backgroundColor = '#888';
     }
 
     item.onclick = () => { 
-        if(state.selection[0]) { applyMaterial(state.selection[0], 'texture', key); markDirty(); saveState(); }
-        // Keep open or close based on preference? Usually close.
+        // UPDATED: Apply texture to ALL selected items
+        if(state.selection.length > 0) { 
+            state.selection.forEach(obj => {
+                if (state.walls.includes(obj) || state.floors.includes(obj)) {
+                    applyMaterial(obj, 'texture', key); 
+                }
+            });
+            markDirty(); 
+            saveState(); 
+        }
         txContent.classList.remove('open');
     };
     txContent.appendChild(item);
@@ -203,10 +220,15 @@ const scSlide = document.createElement("input"); scSlide.type = "range"; scSlide
 scSlide.min = "0.1"; scSlide.max = "3.0"; scSlide.step = "0.1"; scSlide.value = "0.2";
 const scVal = document.createElement("span"); scVal.id = "scaleVal"; scVal.innerText = "0.2x";
 
+// UPDATED: Apply scale to ALL selected items
 scSlide.oninput = (e) => { 
     scVal.innerText = e.target.value + 'x';
-    if(state.selection[0]) { 
-        applyMaterial(state.selection[0], 'scale', e.target.value); 
+    if(state.selection.length > 0) { 
+        state.selection.forEach(obj => {
+            if (state.walls.includes(obj) || state.floors.includes(obj)) {
+                applyMaterial(obj, 'scale', e.target.value); 
+            }
+        });
         markDirty(); 
     }
 };
@@ -266,7 +288,9 @@ const sBtn = document.createElement("button"); sBtn.innerHTML = `${icons.save} J
 };
 acRow.append(uBtn, rBtn, dBtn, sBtn); p4.appendChild(acRow); toolbar.appendChild(p4);
 
+// Initial State Save
 saveState(); 
+
 setupEvents();
 window.addEventListener('resize', handleResize);
 function animate() { 

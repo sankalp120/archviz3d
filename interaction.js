@@ -8,9 +8,13 @@ import { buildWall, updateConnectedWalls, updateConnectedNodes, saveState, gener
 export const transformControls = new TransformControls(activeCamera, renderer.domElement);
 transformControls.setSize(0.8); scene.add(transformControls);
 
+// Fix: Save state only when dragging ENDS (!event.value)
 transformControls.addEventListener('dragging-changed', (event) => {
     controls.enabled = !event.value;
-    if (!event.value) { saveState(); markDirty(); }
+    if (!event.value) { 
+        saveState(); 
+        markDirty(); 
+    }
 });
 
 const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
@@ -166,7 +170,9 @@ export function deleteSelected() {
         if (state.furniture.includes(obj)) state.furniture = state.furniture.filter(f => f !== obj);
     });
     generateFloor();
-    clearSelection(); markDirty(); saveState();
+    clearSelection(); markDirty(); 
+    // Fix: Save state after deletion logic is complete
+    saveState();
 }
 
 export function setupEvents() {
@@ -179,7 +185,11 @@ export function setupEvents() {
         const hits = raycaster.intersectObject(floor);
         if(hits.length) {
             let pt = hits[0].point; pt.x=snap(pt.x); pt.z=snap(pt.z); pt.y=0;
-            if(state.lastPoint) { buildWall(state.lastPoint, pt); saveState(); state.lastPoint = pt; } 
+            if(state.lastPoint) { 
+                buildWall(state.lastPoint, pt); 
+                saveState(); // Fix: Save state after building wall
+                state.lastPoint = pt; 
+            } 
             else state.lastPoint = pt;
         }
     } else {

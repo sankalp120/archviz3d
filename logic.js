@@ -4,13 +4,19 @@ import { scene, loadTex, loader, activeCamera } from "./world.js";
 import { state } from "./store.js";
 import { clearSelection } from "./interaction.js";
 
-// === Online Texture Registry ===
-// Exported URLs for UI Thumbnails
+// === Local Texture Registry ===
+// CHANGE: Pointing to local files instead of online URLs.
+// Ensure these files exist in your './public/textures/' folder.
 export const textureURLs = {
-  'Brick': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/brick_diffuse.jpg',
-  'Concrete': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg',
-  'Wood': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/hardwood2_diffuse.jpg',
-  'Paper': 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/uv_grid_opengl.jpg'
+  'Brick': './public/textures/brick.jpg',
+  'Concrete': './public/textures/concrete.jpg',
+  'Beige': './public/textures/beige_wall.jpg',
+  'Wood': './public/textures/wood_2.jpg',
+  'Wood_2': './public/textures/wood.jpg',
+  'Worn_Wood': './public/textures/worn_wood.jpg',
+  //'Paper': './public/textures/Paper.jpg',
+  'Marble': './public/textures/marble.jpg',
+  'Marble_2': './public/textures/marble_2.jpg'
 };
 
 const textures = { 'Plain': null };
@@ -39,7 +45,7 @@ export function buildWall(p1, p2, silent = false) {
   
   wall.position.set((p1.x+p2.x)/2, state.wallHeight/2, (p1.z+p2.z)/2);
   wall.rotation.y = -angle; wall.castShadow = wall.receiveShadow = true;
-  // Default mapping set to 0.2 per previous request
+  // Default mapping set to 0.2
   wall.userData = { length: len, color: 'eeeeee', texture: 'Plain', textureScale: 0.2, start: nStart, end: nEnd };
   wall.position.y = (state.wallHeight/2) - 0.01;
 
@@ -106,7 +112,6 @@ export function generateFloor() {
         cloned.wrapS = cloned.wrapT = THREE.RepeatWrapping;
         const box = new THREE.Box3().setFromPoints(points.map(p=>new THREE.Vector3(p.x,0,p.y)));
         const size = box.getSize(new THREE.Vector3());
-        // Apply Scale to Floor Mapping
         cloned.repeat.set((size.x / 4) * scale, (size.z / 4) * scale);
         mat.map = cloned;
     }
@@ -136,10 +141,8 @@ export function applyMaterial(obj, type, value) {
       return; 
   }
   
-  // Handle Texture Scaling or Changing
   if (type === 'scale') {
       obj.userData.textureScale = parseFloat(value);
-      // Re-apply current texture to update repeat
       if (obj.userData.texture && obj.userData.texture !== 'Plain') {
           applyMaterial(obj, 'texture', obj.userData.texture);
       }
@@ -155,14 +158,12 @@ export function applyMaterial(obj, type, value) {
     if(tex) {
       const scale = obj.userData.textureScale || 0.2;
       const cloned = tex.clone(); cloned.source = tex.source; 
-      // Apply Scale to Wall Mapping
       cloned.repeat.set((obj.userData.length || 1) * scale, state.wallHeight * scale);
       mat.map = cloned; mat.color.set(0xffffff); mat.needsUpdate = true; obj.userData.texture = value;
     }
   }
 }
 
-// ... CheckTransparentWalls, Save, Undo, Redo ...
 export function checkTransparentWalls() {
     if (!state.transparentWalls || state.placingWall) {
         state.walls.forEach(w => {
@@ -180,8 +181,13 @@ export function checkTransparentWalls() {
     });
 }
 
+// === HISTORY SYSTEM ===
+
 export function saveState() {
-  if (state.historyStep < state.history.length - 1) state.history = state.history.slice(0, state.historyStep + 1);
+  if (state.historyStep < state.history.length - 1) {
+      state.history = state.history.slice(0, state.historyStep + 1);
+  }
+  
   const s = { 
       walls: state.walls.map(w => ({
           p:[w.position.x,w.position.y,w.position.z], rot:w.rotation.y, l:w.userData.length, 
@@ -190,7 +196,14 @@ export function saveState() {
       furniture: state.furniture.map(f => ({m:f.userData.model, p:[f.position.x,f.position.y,f.position.z], r:[f.rotation.x,f.rotation.y,f.rotation.z], s:[f.scale.x,f.scale.y,f.scale.z]})),
       floor: { ...state.floorConfig }
   };
-  state.history.push(JSON.stringify(s)); state.historyStep++;
+  
+  state.history.push(JSON.stringify(s)); 
+  state.historyStep++;
+
+  if (state.history.length > state.MAX_HISTORY) {
+      state.history.shift();
+      state.historyStep--;
+  }
 }
 
 export function undo() {
@@ -217,18 +230,25 @@ function restoreSnapshot(d) {
   d.walls.forEach(w => {
      const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
      const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
-     wall.userData.texture = w.t; wall.userData.color = w.c; wall.userData.textureScale = w.ts || 0.2;
+     
+     wall.userData.texture = w.t; 
+     wall.userData.color = w.c; 
+     wall.userData.textureScale = w.ts || 0.2;
+     
      if(!state.placingWall) {
          if (w.t && w.t !== 'Plain') applyMaterial(wall, 'texture', w.t);
          else applyMaterial(wall, 'color', '#' + w.c);
      }
   });
+
   d.furniture.forEach(f => {
     loader.load(`./public/models/${f.m}.glb`, (g) => {
         const m = g.scene; m.userData.model=f.m; m.position.set(...f.p); m.rotation.set(...f.r); m.scale.set(...f.s);
+        m.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
         scene.add(m); state.furniture.push(m);
     });
   });
+
   generateFloor();
 }
 
