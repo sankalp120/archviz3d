@@ -114,3 +114,47 @@ export function handleResize() {
   orthoCamera.top = viewSize; orthoCamera.bottom = -viewSize;
   orthoCamera.updateProjectionMatrix();
 }
+
+// === Floor Plan Import ===
+export let floorPlanMesh;
+
+export function loadFloorPlan(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            if(floorPlanMesh) scene.remove(floorPlanMesh);
+            
+            const tex = new THREE.Texture(img);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.needsUpdate = true;
+            
+            // Default width 15m, calculate height based on aspect ratio
+            const aspect = img.height / img.width;
+            const w = 15; 
+            const h = w * aspect;
+            
+            const geo = new THREE.PlaneGeometry(w, h);
+            const mat = new THREE.MeshBasicMaterial({ 
+                map: tex, 
+                transparent: true, 
+                opacity: 0.4, // Low opacity for tracing
+                side: THREE.DoubleSide,
+                depthTest: false 
+            });
+            
+            floorPlanMesh = new THREE.Mesh(geo, mat);
+            floorPlanMesh.rotation.x = -Math.PI / 2;
+            floorPlanMesh.position.y = 0.01; // Just above grid
+            floorPlanMesh.visible = state.placingWall; // Only visible if currently drawing
+            
+            scene.add(floorPlanMesh);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+export function toggleFloorPlan(isVisible) {
+    if(floorPlanMesh) floorPlanMesh.visible = isVisible;
+}

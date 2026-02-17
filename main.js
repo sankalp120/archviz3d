@@ -1,6 +1,7 @@
 // main.js
 import * as THREE from "three";
-import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, perspCamera, handleResize, loader, updateGrid, updateSun, toggleDarkMode } from "./world.js";
+// UPDATED: Added loadFloorPlan and toggleFloorPlan to imports
+import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, perspCamera, handleResize, loader, updateGrid, updateSun, toggleDarkMode, loadFloorPlan, toggleFloorPlan } from "./world.js";
 import { state, markDirty } from "./store.js";
 import { setupEvents, transformControls, clearSelection, selectObject, deleteSelected, selectAll, hidePreview, setGizmoMode } from "./interaction.js";
 import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures, textureURLs } from "./logic.js";
@@ -122,10 +123,28 @@ sCheck.onchange = (e) => { state.transparentWalls = e.target.checked; };
 sLabel.append(sCheck, "Smart Transparency");
 sRow.appendChild(sLabel); p2.appendChild(sRow);
 
+// UPDATED: Floor Plan Import UI
+const planRow = document.createElement("div"); planRow.className = "row"; planRow.style.marginTop="8px";
+const planBtn = document.createElement("button"); planBtn.innerText = "Import Floor Plan"; planBtn.style.flex="1";
+const planInput = document.createElement("input"); planInput.type="file"; planInput.accept="image/*"; planInput.style.display="none";
+planRow.appendChild(planBtn); p2.appendChild(planRow);
+
+planBtn.onclick = () => planInput.click();
+planInput.onchange = (e) => {
+    if(e.target.files && e.target.files[0]) {
+        loadFloorPlan(e.target.files[0]);
+    }
+};
+
 drawBtn.onclick = () => {
     state.placingWall = !state.placingWall;
     drawBtn.innerText = state.placingWall ? "Stop Drawing" : "Draw Wall";
     drawBtn.classList.toggle("active", state.placingWall);
+    
+    // UPDATED: Switch Cursor and Toggle Floor Plan Visibility
+    document.body.style.cursor = state.placingWall ? "crosshair" : "default";
+    toggleFloorPlan(state.placingWall);
+
     state.walls.forEach(w => {
         w.children[0].visible = state.placingWall;
         w.material = state.placingWall ? new THREE.MeshBasicMaterial({color:0x999999}) : new THREE.MeshStandardMaterial({color:0xeeeeee});
@@ -161,11 +180,9 @@ p3.innerHTML = `<div class="section-title">Appearance</div>`;
 const cRow = document.createElement("div"); cRow.className = "row"; cRow.style.marginBottom="8px";
 const cInput = document.createElement("input"); cInput.type="color"; cInput.id="colInput"; cInput.value="#eeeeee";
 
-// UPDATED: Apply color to ALL selected items
 cInput.oninput = e => { 
     if(state.selection.length > 0) {
         state.selection.forEach(obj => {
-            // Only apply to walls/floors to prevent crashing on furniture/nodes
             if (state.walls.includes(obj) || state.floors.includes(obj)) {
                 applyMaterial(obj, 'color', e.target.value); 
             }
@@ -197,7 +214,6 @@ Object.keys(wallTextures).forEach(key => {
     }
 
     item.onclick = () => { 
-        // UPDATED: Apply texture to ALL selected items
         if(state.selection.length > 0) { 
             state.selection.forEach(obj => {
                 if (state.walls.includes(obj) || state.floors.includes(obj)) {
@@ -220,7 +236,6 @@ const scSlide = document.createElement("input"); scSlide.type = "range"; scSlide
 scSlide.min = "0.1"; scSlide.max = "3.0"; scSlide.step = "0.1"; scSlide.value = "0.2";
 const scVal = document.createElement("span"); scVal.id = "scaleVal"; scVal.innerText = "0.2x";
 
-// UPDATED: Apply scale to ALL selected items
 scSlide.oninput = (e) => { 
     scVal.innerText = e.target.value + 'x';
     if(state.selection.length > 0) { 
