@@ -1,10 +1,9 @@
 // main.js
 import * as THREE from "three";
-// UPDATED: Added loadFloorPlan and toggleFloorPlan to imports
 import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, perspCamera, handleResize, loader, updateGrid, updateSun, toggleDarkMode, loadFloorPlan, toggleFloorPlan } from "./world.js";
 import { state, markDirty } from "./store.js";
 import { setupEvents, transformControls, clearSelection, selectObject, deleteSelected, selectAll, hidePreview, setGizmoMode } from "./interaction.js";
-import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures, textureURLs } from "./logic.js";
+import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures, textureURLs, getProjectData, loadProjectData } from "./logic.js";
 
 function loadFurniture(name) {
   loader.load(`./public/models/${name}.glb`, (gltf) => {
@@ -23,6 +22,7 @@ const icons = {
   undo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>`,
   redo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.4 10.6C16.55 9 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>`,
   save: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>`,
+  load: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`,
   chevron: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`,
   sun: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`
 };
@@ -270,7 +270,7 @@ const tr = new THREE.WebGLRenderer({ antialias: true, alpha: true }); tr.setSize
 const ts = new THREE.Scene(); const tc = new THREE.PerspectiveCamera(45, 1, 0.1, 10); tc.position.set(2, 2, 3); tc.lookAt(0, 0.5, 0);
 ts.add(new THREE.DirectionalLight(0xffffff, 2)); ts.add(new THREE.AmbientLight(0xffffff, 1));
 
-["sofa","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable","sofa_2", "window","kitchen_1","kitchen_2","kitchen_3","kitchen_4","door_1","door_2","door_3"].forEach(name => {
+["sofa","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable","sofa_2", "window","kitchen_1","kitchen_2","kitchen_3","kitchen_4"].forEach(name => {
   const btn = document.createElement("div"); btn.className = "furn-item";
   btn.innerHTML = `<span>${name}</span>`;
   btn.onclick = () => { loadFurniture(name); dropContent.classList.remove('open'); }; 
@@ -297,12 +297,27 @@ const uBtn = document.createElement("button"); uBtn.id="undoBtn"; uBtn.innerHTML
 const rBtn = document.createElement("button"); rBtn.id="redoBtn"; rBtn.innerHTML = `${icons.redo} Redo`; rBtn.onclick = redo;
 const dBtn = document.createElement("button"); dBtn.className = "danger"; dBtn.innerHTML = `${icons.trash} Del`; dBtn.onclick = deleteSelected;
 const sBtn = document.createElement("button"); sBtn.innerHTML = `${icons.save} JSON`; sBtn.onclick = () => {
-    // FIX: Save the CURRENT state (using historyStep) instead of the LATEST state (length-1).
-    // This ensures that if you Undo something, you save what you currently see, not the future state.
-    const blob = new Blob([state.history[state.historyStep]], {type:"application/json"});
-    const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="project.json"; a.click();
+    const json = getProjectData(); // Use new function for reliable snapshot
+    const blob = new Blob([json], {type:"application/json"});
+    const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`project-${Date.now()}.json`; a.click();
 };
-acRow.append(uBtn, rBtn, dBtn, sBtn); p4.appendChild(acRow); toolbar.appendChild(p4);
+
+const lBtn = document.createElement("button"); lBtn.innerHTML = `${icons.load} Load`;
+const lInp = document.createElement("input"); lInp.type="file"; lInp.accept=".json"; lInp.style.display="none";
+lBtn.onclick = () => {
+    lInp.value = ""; // FIX: Reset input so the same file can be reloaded
+    lInp.click();
+};
+lInp.onchange = (e) => { 
+    if(e.target.files[0]) {
+        const r = new FileReader();
+        r.onload = (ev) => loadProjectData(ev.target.result);
+        r.readAsText(e.target.files[0]);
+    }
+};
+
+acRow.append(uBtn, rBtn, dBtn, sBtn, lBtn);
+p4.appendChild(acRow); toolbar.appendChild(p4);
 
 // Initial State Save
 saveState(); 

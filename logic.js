@@ -188,18 +188,34 @@ export function checkTransparentWalls() {
     });
 }
 
-export function saveState() {
-  if (state.historyStep < state.history.length - 1) {
-      state.history = state.history.slice(0, state.historyStep + 1);
-  }
+// === SAVING & LOADING ===
+
+export function getProjectData() {
   const s = { 
       walls: state.walls.map(w => ({
           p:[w.position.x,w.position.y,w.position.z], rot:w.rotation.y, l:w.userData.length, 
           t:w.userData.texture, c:w.userData.color, ts: w.userData.textureScale 
       })), 
       furniture: state.furniture.map(f => ({m:f.userData.model, p:[f.position.x,f.position.y,f.position.z], r:[f.rotation.x,f.rotation.y,f.rotation.z], s:[f.scale.x,f.scale.y,f.scale.z]})),
-      floor: { ...state.floorConfig }
+      floor: { ...state.floorConfig },
+      config: { wallHeight: state.wallHeight }
   };
+  return JSON.stringify(s);
+}
+
+export function loadProjectData(jsonStr) {
+    try {
+        const d = JSON.parse(jsonStr);
+        restoreSnapshot(d);
+        saveState();
+    } catch(e) { console.error(e); alert("Invalid JSON"); }
+}
+
+export function saveState() {
+  if (state.historyStep < state.history.length - 1) {
+      state.history = state.history.slice(0, state.historyStep + 1);
+  }
+  const s = JSON.parse(getProjectData());
   state.history.push(JSON.stringify(s)); 
   state.historyStep++;
   if (state.history.length > state.MAX_HISTORY) {
@@ -220,27 +236,40 @@ export function redo() {
     }
 }
 
-// FIXED: Exporting this function and adding safety checks
+// FIXED: Universal Loader supporting old & new formats
 export function restoreSnapshot(d) {
-  if (!d) return;
+  if(!d) return;
   clearSelection();
-  
-  // Clear Current Scene
   state.walls.forEach(w => scene.remove(w)); state.walls = [];
   state.furniture.forEach(f => scene.remove(f)); state.furniture = [];
   state.nodes.forEach(n => scene.remove(n)); state.nodes = [];
   
   if (d.floor) state.floorConfig = d.floor;
+  if (d.config && d.config.wallHeight) state.wallHeight = d.config.wallHeight;
 
   // Restore Walls
   if (d.walls) {
     d.walls.forEach(w => {
-       const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
-       const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
-       wall.userData.texture = w.t; wall.userData.color = w.c; wall.userData.textureScale = w.ts || 0.2;
+       // Support for old format (pos, rot, len) and new format (p, rot, l)
+       const pos = w.p || w.pos;
+       const rot = (w.rot !== undefined) ? w.rot : w.r;
+       const len = (w.l !== undefined) ? w.l : w.len;
+       const tex = w.t || w.texture;
+       const col = w.c || w.color;
+       const texScale = w.ts || 0.2;
+
+       if (!pos || rot === undefined || len === undefined) return;
+
+       const hL = len/2, dx = hL*Math.cos(-rot), dz = hL*Math.sin(-rot);
+       const wall = buildWall({x:pos[0]-dx, z:pos[2]-dz}, {x:pos[0]+dx, z:pos[2]+dz}, true);
+       
+       wall.userData.texture = tex; 
+       wall.userData.color = col; 
+       wall.userData.textureScale = texScale;
+       
        if(!state.placingWall) {
-           if (w.t && w.t !== 'Plain') applyMaterial(wall, 'texture', w.t);
-           else applyMaterial(wall, 'color', '#' + w.c);
+           if (tex && tex !== 'Plain') applyMaterial(wall, 'texture', tex);
+           else applyMaterial(wall, 'color', '#' + col);
        }
     });
   }
@@ -248,14 +277,24 @@ export function restoreSnapshot(d) {
   // Restore Furniture
   if (d.furniture) {
     d.furniture.forEach(f => {
-      loader.load(`./public/models/${f.m}.glb`, (g) => {
-          const m = g.scene; m.userData.model=f.m; m.position.set(...f.p); m.rotation.set(...f.r); m.scale.set(...f.s);
-          m.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
-          scene.add(m); state.furniture.push(m);
-      });
+      // Support for old format (model, pos, rot, scale) and new format (m, p, r, s)
+      const modelName = f.m || f.model;
+      const pos = f.p || f.pos;
+      const rot = f.r || f.rot;
+      const scl = f.s || f.scale;
+
+      if(modelName && pos) {
+          loader.load(`./public/models/${modelName}.glb`, (g) => {
+              const m = g.scene; m.userData.model=modelName; 
+              m.position.set(...pos); 
+              if(rot) m.rotation.set(...rot); 
+              if(scl) m.scale.set(...scl);
+              m.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
+              scene.add(m); state.furniture.push(m);
+          });
+      }
     });
   }
-  
   generateFloor();
 }
 export { textures as wallTextures };
