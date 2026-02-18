@@ -13,7 +13,7 @@ export const state = {
   isDarkMode: true,
   dirty: false,
   wallHeight: 3,
-  gridSnap: 0.1,
+  gridSnap: 0.25,
   gridSize: 20,
   sunIntensity: 1.2,
   sunRotation: 0.5,
