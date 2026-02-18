@@ -118,41 +118,55 @@ export function handleResize() {
 // === Floor Plan Import ===
 export let floorPlanMesh;
 
+// NEW: Helper to create the mesh from an image source (URL or Base64)
+export function loadFloorPlanFromSrc(src) {
+    const img = new Image();
+    img.onload = () => {
+        if(floorPlanMesh) scene.remove(floorPlanMesh);
+        
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        
+        // Default width 15m, calculate height based on aspect ratio
+        const aspect = img.height / img.width;
+        const w = 15; 
+        const h = w * aspect;
+        
+        const geo = new THREE.PlaneGeometry(w, h);
+        const mat = new THREE.MeshBasicMaterial({ 
+            map: tex, 
+            transparent: true, 
+            opacity: 0.4, // Low opacity for tracing
+            side: THREE.DoubleSide,
+            depthTest: false 
+        });
+        
+        floorPlanMesh = new THREE.Mesh(geo, mat);
+        floorPlanMesh.rotation.x = -Math.PI / 2;
+        floorPlanMesh.position.y = 0.01; // Just above grid
+        floorPlanMesh.visible = state.placingWall; // Only visible if currently drawing
+        
+        scene.add(floorPlanMesh);
+    };
+    img.src = src;
+}
+
+// Handle File Object (from Input)
 export function loadFloorPlan(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-            if(floorPlanMesh) scene.remove(floorPlanMesh);
-            
-            const tex = new THREE.Texture(img);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            tex.needsUpdate = true;
-            
-            // Default width 15m, calculate height based on aspect ratio
-            const aspect = img.height / img.width;
-            const w = 15; 
-            const h = w * aspect;
-            
-            const geo = new THREE.PlaneGeometry(w, h);
-            const mat = new THREE.MeshBasicMaterial({ 
-                map: tex, 
-                transparent: true, 
-                opacity: 0.4, // Low opacity for tracing
-                side: THREE.DoubleSide,
-                depthTest: false 
-            });
-            
-            floorPlanMesh = new THREE.Mesh(geo, mat);
-            floorPlanMesh.rotation.x = -Math.PI / 2;
-            floorPlanMesh.position.y = 0.01; // Just above grid
-            floorPlanMesh.visible = state.placingWall; // Only visible if currently drawing
-            
-            scene.add(floorPlanMesh);
-        };
-        img.src = e.target.result;
+        loadFloorPlanFromSrc(e.target.result);
     };
     reader.readAsDataURL(file);
+}
+
+// NEW: Export current floor plan data for saving
+export function getFloorPlanData() {
+    if (floorPlanMesh && floorPlanMesh.material.map && floorPlanMesh.material.map.image) {
+        return floorPlanMesh.material.map.image.src;
+    }
+    return null;
 }
 
 export function toggleFloorPlan(isVisible) {

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { scene, renderer, activeCamera, controls, setActiveCamera, orthoCamera, perspCamera, handleResize, loader, updateGrid, updateSun, toggleDarkMode, loadFloorPlan, toggleFloorPlan } from "./world.js";
 import { state, markDirty } from "./store.js";
 import { setupEvents, transformControls, clearSelection, selectObject, deleteSelected, selectAll, hidePreview, setGizmoMode } from "./interaction.js";
-import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures, textureURLs, getProjectData, loadProjectData } from "./logic.js";
+import { applyMaterial, undo, redo, saveState, checkTransparentWalls, wallTextures, textureURLs, getProjectData, loadProjectData, restoreSnapshot } from "./logic.js";
 
 function loadFurniture(name) {
   loader.load(`./public/models/${name}.glb`, (gltf) => {
@@ -297,7 +297,7 @@ const uBtn = document.createElement("button"); uBtn.id="undoBtn"; uBtn.innerHTML
 const rBtn = document.createElement("button"); rBtn.id="redoBtn"; rBtn.innerHTML = `${icons.redo} Redo`; rBtn.onclick = redo;
 const dBtn = document.createElement("button"); dBtn.className = "danger"; dBtn.innerHTML = `${icons.trash} Del`; dBtn.onclick = deleteSelected;
 const sBtn = document.createElement("button"); sBtn.innerHTML = `${icons.save} JSON`; sBtn.onclick = () => {
-    const json = getProjectData(); // Use new function for reliable snapshot
+    const json = getProjectData(); 
     const blob = new Blob([json], {type:"application/json"});
     const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`project-${Date.now()}.json`; a.click();
 };
@@ -305,7 +305,7 @@ const sBtn = document.createElement("button"); sBtn.innerHTML = `${icons.save} J
 const lBtn = document.createElement("button"); lBtn.innerHTML = `${icons.load} Load`;
 const lInp = document.createElement("input"); lInp.type="file"; lInp.accept=".json"; lInp.style.display="none";
 lBtn.onclick = () => {
-    lInp.value = ""; // FIX: Reset input so the same file can be reloaded
+    lInp.value = ""; 
     lInp.click();
 };
 lInp.onchange = (e) => { 
@@ -319,9 +319,31 @@ lInp.onchange = (e) => {
 acRow.append(uBtn, rBtn, dBtn, sBtn, lBtn);
 p4.appendChild(acRow); toolbar.appendChild(p4);
 
-// Initial State Save
-saveState(); 
+// === Init ================================================================
+async function loadTemplate() {
+  saveState();
+  const tName = localStorage.getItem("selectedTemplate"); if(!tName) return;
+  let data = null;
+  
+  if(tName === "custom") { 
+      const raw = localStorage.getItem("customTemplate"); 
+      if(raw) data = JSON.parse(raw);
+  }
+  else { 
+      try { 
+          const res = await fetch("./public/templates.json"); 
+          const json = await res.json(); 
+          data = json[tName]; 
+      } catch(e) {} 
+  }
+  
+  // Use universal loader for both custom and built-in templates
+  if(data) restoreSnapshot(data);
+  
+  setTimeout(() => saveState(), 500);
+}
 
+loadTemplate();
 setupEvents();
 window.addEventListener('resize', handleResize);
 function animate() { 
