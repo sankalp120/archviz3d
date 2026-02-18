@@ -1,22 +1,8 @@
 // logic.js
 import * as THREE from "three";
-import { scene, loader, activeCamera, getFloorPlanData, loadFloorPlanFromSrc } from "./world.js";
+import { scene, loadTex, loader, activeCamera } from "./world.js";
 import { state } from "./store.js";
 import { clearSelection } from "./interaction.js";
-
-// === Texture Loader Helper ===
-const textureLoader = new THREE.TextureLoader();
-function loadTex(path) {
-    const tex = textureLoader.load(path, (t) => {
-        t.colorSpace = THREE.SRGBColorSpace;
-        t.wrapS = THREE.RepeatWrapping; 
-        t.wrapT = THREE.RepeatWrapping;
-        t.needsUpdate = true;
-    }, undefined, (err) => {
-        console.warn(`Failed to load texture: ${path}`, err);
-    });
-    return tex;
-}
 
 // === Local Texture Registry ===
 export const textureURLs = {
@@ -212,8 +198,7 @@ export function getProjectData() {
       })), 
       furniture: state.furniture.map(f => ({m:f.userData.model, p:[f.position.x,f.position.y,f.position.z], r:[f.rotation.x,f.rotation.y,f.rotation.z], s:[f.scale.x,f.scale.y,f.scale.z]})),
       floor: { ...state.floorConfig },
-      config: { wallHeight: state.wallHeight },
-      floorPlan: getFloorPlanData() // Save Floor Plan image data
+      config: { wallHeight: state.wallHeight }
   };
   return JSON.stringify(s);
 }
@@ -251,6 +236,7 @@ export function redo() {
     }
 }
 
+// FIXED: Universal Loader supporting old & new formats
 export function restoreSnapshot(d) {
   if(!d) return;
   clearSelection();
@@ -260,14 +246,11 @@ export function restoreSnapshot(d) {
   
   if (d.floor) state.floorConfig = d.floor;
   if (d.config && d.config.wallHeight) state.wallHeight = d.config.wallHeight;
-  
-  if (d.floorPlan) {
-      loadFloorPlanFromSrc(d.floorPlan);
-  }
 
   // Restore Walls
   if (d.walls) {
     d.walls.forEach(w => {
+       // Support for old format (pos, rot, len) and new format (p, rot, l)
        const pos = w.p || w.pos;
        const rot = (w.rot !== undefined) ? w.rot : w.r;
        const len = (w.l !== undefined) ? w.l : w.len;
@@ -294,6 +277,7 @@ export function restoreSnapshot(d) {
   // Restore Furniture
   if (d.furniture) {
     d.furniture.forEach(f => {
+      // Support for old format (model, pos, rot, scale) and new format (m, p, r, s)
       const modelName = f.m || f.model;
       const pos = f.p || f.pos;
       const rot = f.r || f.rot;
