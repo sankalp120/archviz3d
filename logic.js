@@ -20,14 +20,14 @@ function loadTex(path) {
 
 // === Local Texture Registry ===
 export const textureURLs = {
-  'Brick': 'public/textures/brick.jpg',
-  'Concrete': 'public/textures/concrete.jpg',
-  'Beige': 'public/textures/beige_wall.jpg',
-  'Wood': 'public/textures/wood.jpg',
-  'Wood_2': 'public/textures/wood_2.jpg',
-  'Worn_Wood': 'public/textures/worn_wood.jpg',
-  'Marble': 'public/textures/marble.jpg',
-  'Marble_2': 'public/textures/marble_2.jpg'
+  'Brick': './public/textures/brick.jpg',
+  'Concrete': './public/textures/concrete.jpg',
+  'Beige': './public/textures/beige_wall.jpg',
+  'Wood': './public/textures/wood.jpg',
+  'Wood_2': './public/textures/wood_2.jpg',
+  'Worn_Wood': './public/textures/worn_wood.jpg',
+  'Marble': './public/textures/marble.jpg',
+  'Marble_2': './public/textures/marble_2.jpg'
 };
 
 const textures = { 'Plain': null };
