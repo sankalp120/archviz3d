@@ -123,7 +123,7 @@ sCheck.onchange = (e) => { state.transparentWalls = e.target.checked; };
 sLabel.append(sCheck, "Smart Transparency");
 sRow.appendChild(sLabel); p2.appendChild(sRow);
 
-// UPDATED: Floor Plan Import UI
+// Floor Plan Import UI
 const planRow = document.createElement("div"); planRow.className = "row"; planRow.style.marginTop="8px";
 const planBtn = document.createElement("button"); planBtn.innerText = "Import Floor Plan"; planBtn.style.flex="1";
 const planInput = document.createElement("input"); planInput.type="file"; planInput.accept="image/*"; planInput.style.display="none";
@@ -141,7 +141,6 @@ drawBtn.onclick = () => {
     drawBtn.innerText = state.placingWall ? "Stop Drawing" : "Draw Wall";
     drawBtn.classList.toggle("active", state.placingWall);
     
-    // UPDATED: Switch Cursor and Toggle Floor Plan Visibility
     document.body.style.cursor = state.placingWall ? "crosshair" : "default";
     toggleFloorPlan(state.placingWall);
 
@@ -271,7 +270,7 @@ const tr = new THREE.WebGLRenderer({ antialias: true, alpha: true }); tr.setSize
 const ts = new THREE.Scene(); const tc = new THREE.PerspectiveCamera(45, 1, 0.1, 10); tc.position.set(2, 2, 3); tc.lookAt(0, 0.5, 0);
 ts.add(new THREE.DirectionalLight(0xffffff, 2)); ts.add(new THREE.AmbientLight(0xffffff, 1));
 
-["sofa","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable"].forEach(name => {
+["sofa","chair","cupboard","bed","tv","lamp","toilet","basin","sidetable","sofa_2", "window","kitchen_1","kitchen_2","kitchen_3","kitchen_4","door_1","door_2","door_3"].forEach(name => {
   const btn = document.createElement("div"); btn.className = "furn-item";
   btn.innerHTML = `<span>${name}</span>`;
   btn.onclick = () => { loadFurniture(name); dropContent.classList.remove('open'); }; 
@@ -298,7 +297,9 @@ const uBtn = document.createElement("button"); uBtn.id="undoBtn"; uBtn.innerHTML
 const rBtn = document.createElement("button"); rBtn.id="redoBtn"; rBtn.innerHTML = `${icons.redo} Redo`; rBtn.onclick = redo;
 const dBtn = document.createElement("button"); dBtn.className = "danger"; dBtn.innerHTML = `${icons.trash} Del`; dBtn.onclick = deleteSelected;
 const sBtn = document.createElement("button"); sBtn.innerHTML = `${icons.save} JSON`; sBtn.onclick = () => {
-    const blob = new Blob([state.history[state.history.length-1]], {type:"application/json"});
+    // FIX: Save the CURRENT state (using historyStep) instead of the LATEST state (length-1).
+    // This ensures that if you Undo something, you save what you currently see, not the future state.
+    const blob = new Blob([state.history[state.historyStep]], {type:"application/json"});
     const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="project.json"; a.click();
 };
 acRow.append(uBtn, rBtn, dBtn, sBtn); p4.appendChild(acRow); toolbar.appendChild(p4);

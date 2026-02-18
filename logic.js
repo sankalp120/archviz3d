@@ -5,8 +5,6 @@ import { state } from "./store.js";
 import { clearSelection } from "./interaction.js";
 
 // === Local Texture Registry ===
-// CHANGE: Pointing to local files instead of online URLs.
-// Ensure these files exist in your './public/textures/' folder.
 export const textureURLs = {
   'Brick': './public/textures/brick.jpg',
   'Concrete': './public/textures/concrete.jpg',
@@ -14,7 +12,6 @@ export const textureURLs = {
   'Wood': './public/textures/wood.jpg',
   'Wood_2': './public/textures/wood_2.jpg',
   'Worn_Wood': './public/textures/worn_wood.jpg',
-  //'Paper': './public/textures/Paper.jpg',
   'Marble': './public/textures/marble.jpg',
   'Marble_2': './public/textures/marble_2.jpg'
 };
@@ -45,7 +42,6 @@ export function buildWall(p1, p2, silent = false) {
   
   wall.position.set((p1.x+p2.x)/2, state.wallHeight/2, (p1.z+p2.z)/2);
   wall.rotation.y = -angle; wall.castShadow = wall.receiveShadow = true;
-  // Default mapping set to 0.2
   wall.userData = { length: len, color: 'eeeeee', texture: 'Plain', textureScale: 0.2, start: nStart, end: nEnd };
   wall.position.y = (state.wallHeight/2) - 0.01;
 
@@ -56,7 +52,6 @@ export function buildWall(p1, p2, silent = false) {
   return wall;
 }
 
-// === Elasticity ===
 export function updateConnectedWalls(node) {
   node.userData.walls.forEach(w => {
     const n1 = w.userData.start, n2 = w.userData.end;
@@ -81,51 +76,68 @@ export function updateConnectedNodes(wall) {
   updateConnectedWalls(wall.userData.start); updateConnectedWalls(wall.userData.end);
 }
 
-// === Floor Generation ===
-export function generateFloor() {
-    state.floors.forEach(f => scene.remove(f)); state.floors = [];
-    if (state.nodes.length < 3) return;
-
-    const points = state.nodes.map(n => new THREE.Vector2(n.position.x, n.position.z));
-    const center = new THREE.Vector2();
-    points.forEach(p => center.add(p)); center.divideScalar(points.length);
-    points.sort((a,b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
-
-    const shape = new THREE.Shape(points);
-    const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(Math.PI / 2);
-    
-    const tName = state.floorConfig.texture;
-    const tex = textures[tName];
-    const scale = state.floorConfig.scale || 0.2;
-    
-    const mat = new THREE.MeshStandardMaterial({ 
-        color: '#' + state.floorConfig.color, 
-        roughness: 0.1, 
-        metalness: 0.1,
-        side: THREE.DoubleSide
+function getConnectedGroups(allNodes) {
+    const groups = [];
+    const visited = new Set();
+    allNodes.forEach(node => {
+        if (visited.has(node)) return;
+        const group = [];
+        const queue = [node];
+        visited.add(node);
+        while (queue.length > 0) {
+            const current = queue.pop();
+            group.push(current);
+            current.userData.walls.forEach(w => {
+                const neighbor = (w.userData.start === current) ? w.userData.end : w.userData.start;
+                if (neighbor && !visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    queue.push(neighbor);
+                }
+            });
+        }
+        if (group.length >= 3) groups.push(group);
     });
-
-    if (tex) {
-        const cloned = tex.clone();
-        cloned.source = tex.source; 
-        cloned.wrapS = cloned.wrapT = THREE.RepeatWrapping;
-        const box = new THREE.Box3().setFromPoints(points.map(p=>new THREE.Vector3(p.x,0,p.y)));
-        const size = box.getSize(new THREE.Vector3());
-        cloned.repeat.set((size.x / 4) * scale, (size.z / 4) * scale);
-        mat.map = cloned;
-    }
-
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.y = 0.02; 
-    mesh.receiveShadow = true;
-    
-    scene.add(mesh); state.floors.push(mesh);
+    return groups;
 }
 
-// === Materials & History ===
+export function generateFloor() {
+    state.floors.forEach(f => scene.remove(f)); 
+    state.floors = [];
+    if (state.nodes.length < 3) return;
+    const roomGroups = getConnectedGroups(state.nodes);
+    roomGroups.forEach(groupNodes => {
+        const points = groupNodes.map(n => new THREE.Vector2(n.position.x, n.position.z));
+        const center = new THREE.Vector2();
+        points.forEach(p => center.add(p)); 
+        center.divideScalar(points.length);
+        points.sort((a,b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
+        const shape = new THREE.Shape(points);
+        const geo = new THREE.ShapeGeometry(shape);
+        geo.rotateX(Math.PI / 2);
+        const tName = state.floorConfig.texture;
+        const tex = textures[tName];
+        const scale = state.floorConfig.scale || 0.2;
+        const mat = new THREE.MeshStandardMaterial({ 
+            color: '#' + state.floorConfig.color, 
+            roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide
+        });
+        if (tex) {
+            const cloned = tex.clone();
+            cloned.source = tex.source; 
+            cloned.wrapS = cloned.wrapT = THREE.RepeatWrapping;
+            const box = new THREE.Box3().setFromPoints(points.map(p=>new THREE.Vector3(p.x,0,p.y)));
+            const size = box.getSize(new THREE.Vector3());
+            cloned.repeat.set((size.x / 4) * scale, (size.z / 4) * scale);
+            mat.map = cloned;
+        }
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = 0.02; 
+        mesh.receiveShadow = true;
+        scene.add(mesh); state.floors.push(mesh);
+    });
+}
+
 export function applyMaterial(obj, type, value) {
-  // === Floor Handling ===
   if (state.floors.includes(obj)) {
       if (type === 'color') state.floorConfig.color = value.replace('#','');
       if (type === 'texture') state.floorConfig.texture = value;
@@ -133,22 +145,16 @@ export function applyMaterial(obj, type, value) {
       generateFloor();
       return;
   }
-
-  // === Wall Handling ===
   if (state.placingWall) { 
       if(type === 'color') obj.userData.color = value.replace('#','');
       if(type === 'texture') obj.userData.texture = value;
       return; 
   }
-  
   if (type === 'scale') {
       obj.userData.textureScale = parseFloat(value);
-      if (obj.userData.texture && obj.userData.texture !== 'Plain') {
-          applyMaterial(obj, 'texture', obj.userData.texture);
-      }
+      if (obj.userData.texture && obj.userData.texture !== 'Plain') applyMaterial(obj, 'texture', obj.userData.texture);
       return;
   }
-
   const mat = obj.material;
   if (type === 'color') {
     mat.map = null; mat.color.set(value); mat.needsUpdate = true;
@@ -158,6 +164,7 @@ export function applyMaterial(obj, type, value) {
     if(tex) {
       const scale = obj.userData.textureScale || 0.2;
       const cloned = tex.clone(); cloned.source = tex.source; 
+      cloned.wrapS = cloned.wrapT = THREE.RepeatWrapping;
       cloned.repeat.set((obj.userData.length || 1) * scale, state.wallHeight * scale);
       mat.map = cloned; mat.color.set(0xffffff); mat.needsUpdate = true; obj.userData.texture = value;
     }
@@ -181,13 +188,10 @@ export function checkTransparentWalls() {
     });
 }
 
-// === HISTORY SYSTEM ===
-
 export function saveState() {
   if (state.historyStep < state.history.length - 1) {
       state.history = state.history.slice(0, state.historyStep + 1);
   }
-  
   const s = { 
       walls: state.walls.map(w => ({
           p:[w.position.x,w.position.y,w.position.z], rot:w.rotation.y, l:w.userData.length, 
@@ -196,13 +200,10 @@ export function saveState() {
       furniture: state.furniture.map(f => ({m:f.userData.model, p:[f.position.x,f.position.y,f.position.z], r:[f.rotation.x,f.rotation.y,f.rotation.z], s:[f.scale.x,f.scale.y,f.scale.z]})),
       floor: { ...state.floorConfig }
   };
-  
   state.history.push(JSON.stringify(s)); 
   state.historyStep++;
-
   if (state.history.length > state.MAX_HISTORY) {
-      state.history.shift();
-      state.historyStep--;
+      state.history.shift(); state.historyStep--;
   }
 }
 
@@ -219,37 +220,42 @@ export function redo() {
     }
 }
 
-function restoreSnapshot(d) {
+// FIXED: Exporting this function and adding safety checks
+export function restoreSnapshot(d) {
+  if (!d) return;
   clearSelection();
+  
+  // Clear Current Scene
   state.walls.forEach(w => scene.remove(w)); state.walls = [];
   state.furniture.forEach(f => scene.remove(f)); state.furniture = [];
   state.nodes.forEach(n => scene.remove(n)); state.nodes = [];
   
   if (d.floor) state.floorConfig = d.floor;
 
-  d.walls.forEach(w => {
-     const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
-     const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
-     
-     wall.userData.texture = w.t; 
-     wall.userData.color = w.c; 
-     wall.userData.textureScale = w.ts || 0.2;
-     
-     if(!state.placingWall) {
-         if (w.t && w.t !== 'Plain') applyMaterial(wall, 'texture', w.t);
-         else applyMaterial(wall, 'color', '#' + w.c);
-     }
-  });
-
-  d.furniture.forEach(f => {
-    loader.load(`./public/models/${f.m}.glb`, (g) => {
-        const m = g.scene; m.userData.model=f.m; m.position.set(...f.p); m.rotation.set(...f.r); m.scale.set(...f.s);
-        m.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
-        scene.add(m); state.furniture.push(m);
+  // Restore Walls
+  if (d.walls) {
+    d.walls.forEach(w => {
+       const hL = w.l/2, dx = hL*Math.cos(-w.r), dz = hL*Math.sin(-w.r);
+       const wall = buildWall({x:w.p[0]-dx, z:w.p[2]-dz}, {x:w.p[0]+dx, z:w.p[2]+dz}, true);
+       wall.userData.texture = w.t; wall.userData.color = w.c; wall.userData.textureScale = w.ts || 0.2;
+       if(!state.placingWall) {
+           if (w.t && w.t !== 'Plain') applyMaterial(wall, 'texture', w.t);
+           else applyMaterial(wall, 'color', '#' + w.c);
+       }
     });
-  });
+  }
 
+  // Restore Furniture
+  if (d.furniture) {
+    d.furniture.forEach(f => {
+      loader.load(`./public/models/${f.m}.glb`, (g) => {
+          const m = g.scene; m.userData.model=f.m; m.position.set(...f.p); m.rotation.set(...f.r); m.scale.set(...f.s);
+          m.traverse(c => { if(c.isMesh) c.castShadow=c.receiveShadow=true; });
+          scene.add(m); state.furniture.push(m);
+      });
+    });
+  }
+  
   generateFloor();
 }
-
 export { textures as wallTextures };
