@@ -16,7 +16,7 @@ export const state = {
   gridSnap: 0.25,
   gridSize: 20,
   sunIntensity: 1.2,
-  sunRotation: 0.5,
+  sunRotation: 1.0,
   floorConfig: { 
       texture: 'Wood', 
       color: 'ffffff',

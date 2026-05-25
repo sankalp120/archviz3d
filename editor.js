@@ -40,7 +40,7 @@ let activeCamera = orthoCamera;
 // === Controls =============================================================
 const controls = new OrbitControls(activeCamera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.09;
+controls.dampingFactor = 0.1;
 controls.maxPolarAngle = Math.PI / 2.1;
 
 // === Lighting =============================================================
