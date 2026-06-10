@@ -23,7 +23,7 @@ Here is a comprehensive README.md file designed to serve as a user guide and tut
 ARCHVIZ.3D - User Guide & Documentation
 ARCHVIZ.3D is a browser-based, zero-installation CAD system designed for rapid architectural prototyping. It seamlessly synchronizes 2D drafting with real-time 3D visualization, allowing users to draw floor plans, place furniture, and visualize spaces with dynamic lighting and textures.
 
-🚀 Getting Started
+Getting Started
 Installation
 No installation is required. This is a client-side web application.
 
